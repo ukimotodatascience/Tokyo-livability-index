@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tokyo Livability Index</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Tokyo 23 Wards Decision Dashboard</p>
+        <h1>東京23区 住み替え意思決定ダッシュボード</h1>
+        <p class="lead">
+          家賃、治安、アクセス、生活利便性、防災などの重視度を変えながら、
+          自分に合う区を絞り込めます。
+        </p>
+      </div>
+      <div class="header-stats" aria-label="データ概要">
+        <div>
+          <span class="stat-value">23</span>
+          <span class="stat-label">対象区</span>
+        </div>
+        <div>
+          <span class="stat-value">6</span>
+          <span class="stat-label">評価軸</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="control-panel" aria-labelledby="conditions-title">
+        <div class="section-heading">
+          <p class="eyebrow">Step 1</p>
+          <h2 id="conditions-title">おすすめ条件を設定する</h2>
+        </div>
+
+        <div class="settings-heading">
+          <span>カンタン設定</span>
+          <small>近い考え方を選ぶと、下の詳細設定に反映されます。</small>
+        </div>
+
+        <div class="preset-row" role="group" aria-label="カンタン設定">
+          <button class="preset-button active" data-preset="balanced" type="button">
+            指定なし
+          </button>
+          <button class="preset-button" data-preset="budget" type="button">
+            コスパ
+          </button>
+          <button class="preset-button" data-preset="safety" type="button">
+            安心
+          </button>
+          <button class="preset-button" data-preset="access" type="button">
+            通勤アクセス
+          </button>
+          <button class="preset-button" data-preset="convenience" type="button">
+            生活利便性
+          </button>
+          <button class="preset-button" data-preset="resilience" type="button">
+            防災
+          </button>
+        </div>
+
+        <div class="filters-grid">
+          <label class="filter-field" for="rent-limit">
+            <span>家賃上限</span>
+            <select id="rent-limit">
+              <option value="999999">上限なし（12万円以上も含める）</option>
+              <option value="80000">8万円以下</option>
+              <option value="90000">9万円以下</option>
+              <option value="100000">10万円以下</option>
+              <option value="110000">11万円以下</option>
+              <option value="120000">12万円以下</option>
+            </select>
+          </label>
+
+          <label class="filter-field" for="sort-mode">
+            <span>並び替え</span>
+            <select id="sort-mode">
+              <option value="personalized">おすすめ度</option>
+              <option value="rent">家賃が安い順</option>
+              <option value="safety">治安が良い順</option>
+              <option value="accessibility">アクセスが良い順</option>
+              <option value="convenience">生活利便性が高い順</option>
+              <option value="resilience">防災スコアが高い順</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="settings-heading">
+          <span>詳細設定</span>
+          <small>重視する観点を選び、上から順に優先度を並べます。</small>
+        </div>
+        <div class="priority-builder" id="priority-builder"></div>
+      </section>
+
+      <section class="dashboard-grid" aria-label="おすすめ結果">
+        <div class="map-panel">
+          <div class="section-heading inline-heading">
+            <div>
+              <p class="eyebrow">Step 2</p>
+              <h2>地図で位置と傾向を見る</h2>
+            </div>
+            <label class="metric-switch" for="map-metric">
+              <span>色分け</span>
+              <select id="map-metric">
+                <option value="personalizedScore">おすすめ度</option>
+                <option value="score_affordability">家賃</option>
+                <option value="score_accessibility">アクセス</option>
+                <option value="score_safety">治安</option>
+                <option value="score_convenience">生活利便性</option>
+                <option value="score_livability">居住快適性</option>
+                <option value="score_resilience">防災</option>
+              </select>
+            </label>
+          </div>
+          <div class="map-shell">
+            <svg id="ward-map" role="img" aria-label="東京23区マップ"></svg>
+            <div class="map-tooltip" id="map-tooltip" hidden></div>
+          </div>
+          <div class="legend">
+            <span>低</span>
+            <span class="legend-bar"></span>
+            <span>高</span>
+          </div>
+        </div>
+
+        <div class="ranking-panel">
+          <div class="section-heading inline-heading">
+            <div>
+              <p class="eyebrow">Step 3</p>
+              <h2>候補区を絞り込む</h2>
+            </div>
+            <p class="result-count" id="result-count"></p>
+          </div>
+          <div class="ranking-list" id="ranking-list"></div>
+        </div>
+      </section>
+
+      <section class="compare-panel" aria-labelledby="compare-title">
+        <div class="section-heading inline-heading">
+          <div>
+            <p class="eyebrow">Step 4</p>
+            <h2 id="compare-title">候補を横並びで比較する</h2>
+          </div>
+          <button class="ghost-button" id="clear-compare" type="button">比較をクリア</button>
+        </div>
+        <div id="compare-content" class="compare-empty">
+          比較したい区をランキングから追加してください。
+        </div>
+      </section>
+    </main>
+
+    <aside class="detail-drawer" id="detail-drawer" aria-hidden="true">
+      <div class="drawer-backdrop" data-close-drawer></div>
+      <article class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+        <button class="drawer-close" type="button" data-close-drawer aria-label="閉じる">×</button>
+        <div id="drawer-content"></div>
+      </article>
+    </aside>
+
+    <template id="priority-template">
+      <div class="priority-item">
+        <span class="priority-rank"></span>
+        <span class="priority-label"></span>
+        <div class="priority-actions">
+          <button type="button" class="priority-button" data-direction="up" aria-label="優先順位を上げる">↑</button>
+          <button type="button" class="priority-button" data-direction="down" aria-label="優先順位を下げる">↓</button>
+          <button type="button" class="priority-button remove" data-direction="remove" aria-label="重視軸を外す">×</button>
+        </div>
+      </div>
+    </template>
+
+    <script src="assets/embedded-data.js"></script>
+    <script src="assets/app.js"></script>
+  </body>
+</html>
