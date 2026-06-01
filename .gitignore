@@ -1,0 +1,13 @@
+.codex_tmp_venv/
+.venv/
+__pycache__/
+*.pyc
+
+# シークレット情報 (APIキーなど。絶対にGitHubへアップロードしてはいけません)
+.env
+
+# エディタ設定
+.vscode/
+.idea/
+
+.infisical.json
