@@ -1,5 +1,4 @@
 import logging
-import random
 import sys
 import time
 import requests
@@ -216,14 +215,10 @@ def generate_mock_data():
         # 1〜3%程度の適度な揺らぎを追加してリアルさを出す
         stations = stats["stations"]
         lines = stats["lines"]
-        access_time = round(stats["access_time"] * random.uniform(0.95, 1.05), 1)
-        flood_risk = round(
-            min(0.99, max(0.01, stats["flood_risk"] * random.uniform(0.95, 1.05))), 3
-        )
-        earthquake_risk = round(
-            min(5.0, max(1.0, stats["earthquake_risk"] * random.uniform(0.95, 1.05))), 2
-        )
-        shelters = int(stats["shelters"] * random.uniform(0.95, 1.05))
+        access_time = stats["access_time"]
+        flood_risk = stats["flood_risk"]
+        earthquake_risk = stats["earthquake_risk"]
+        shelters = stats["shelters"]
 
         rows.append(
             {

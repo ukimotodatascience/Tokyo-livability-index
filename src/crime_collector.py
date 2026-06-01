@@ -1,5 +1,4 @@
 import logging
-import random
 import sys
 from pathlib import Path
 import pandas as pd
@@ -72,13 +71,12 @@ def generate_mock_data():
     rows = []
     for code, name in TOKYO_23_WARDS.items():
         stats = MOCK_CRIME_STATS[code]
-        # 1〜5%程度のランダム揺らぎを追加
-        total = int(stats["total_crime"] * random.uniform(0.95, 1.05))
-        serious = int(stats["serious_crime"] * random.uniform(0.95, 1.05))
+        total = stats["total_crime"]
+        serious = stats["serious_crime"]
 
         # 罪種別（非侵入窃盗、粗暴犯等）の内訳を適当に割り振り
-        violent_crime = int(total * random.uniform(0.10, 0.15))
-        theft_crime = int(total * random.uniform(0.65, 0.75))
+        violent_crime = int(total * 0.12)
+        theft_crime = int(total * 0.70)
         other_crime = total - violent_crime - theft_crime
 
         rows.append(

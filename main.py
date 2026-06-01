@@ -116,19 +116,19 @@ def run_pipeline(use_demo=False):
 
     # 面積あたりの駅密度・施設密度
     master_df["station_density"] = (
-        master_df["station_count"] / master_df["average_floor_space"]
+        master_df["station_count"] / master_df["ward_area_km2"]
     )
     master_df["convenience_density"] = (
-        master_df["convenience_count"] / master_df["average_floor_space"]
+        master_df["convenience_count"] / master_df["ward_area_km2"]
     )
     master_df["supermarket_density"] = (
-        master_df["supermarket_count"] / master_df["average_floor_space"]
+        master_df["supermarket_count"] / master_df["ward_area_km2"]
     )
     master_df["medical_density"] = (
-        master_df["medical_facility_count"] / master_df["average_floor_space"]
+        master_df["medical_facility_count"] / master_df["ward_area_km2"]
     )
     master_df["daily_facility_density"] = (
-        master_df["daily_facility_count"] / master_df["average_floor_space"]
+        master_df["daily_facility_count"] / master_df["ward_area_km2"]
     )
 
     # 人口あたりの犯罪率 (人口1,000人あたり)

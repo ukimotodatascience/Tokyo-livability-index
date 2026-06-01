@@ -157,6 +157,32 @@ MOCK_WARD_STATS = {
     },  # 江戸川区
 }
 
+WARD_AREA_KM2 = {
+    "13101": 11.66,
+    "13102": 10.21,
+    "13103": 20.37,
+    "13104": 18.22,
+    "13105": 11.29,
+    "13106": 10.11,
+    "13107": 13.77,
+    "13108": 43.01,
+    "13109": 22.84,
+    "13110": 14.67,
+    "13111": 61.86,
+    "13112": 58.05,
+    "13113": 15.11,
+    "13114": 15.59,
+    "13115": 34.06,
+    "13116": 13.01,
+    "13117": 20.61,
+    "13118": 10.16,
+    "13119": 32.22,
+    "13120": 48.08,
+    "13121": 53.25,
+    "13122": 34.80,
+    "13123": 49.90,
+}
+
 
 def generate_mock_data(is_actual_stats=True):
     """23区の実際の最新確定公的統計データを保存する（is_actual_stats=Trueでブレをなくし、100%正確な確定値を出力）"""
@@ -189,6 +215,7 @@ def generate_mock_data(is_actual_stats=True):
                 "single_households": single_households,
                 "average_rent": rent,
                 "average_floor_space": area_size,
+                "ward_area_km2": WARD_AREA_KM2[code],
                 "income_proxy": income_proxy,
             }
         )
@@ -333,6 +360,7 @@ def fetch_estat_data(api_key=ESTAT_API_KEY, use_demo=False):
                     "single_households": single_households,
                     "average_rent": rent,
                     "average_floor_space": area_size,
+                    "ward_area_km2": WARD_AREA_KM2[code],
                     "income_proxy": income_proxy,
                 }
             )
