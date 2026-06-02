@@ -107,6 +107,10 @@ function toNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function perCapitaRate(count, population, scale) {
+  return population > 0 ? (count / population) * scale : 0;
+}
+
 function formatNumber(value) {
   return new Intl.NumberFormat("ja-JP").format(Math.round(value));
 }
@@ -163,6 +167,17 @@ async function loadData() {
     ].forEach((key) => {
       merged[key] = toNumber(merged[key]);
     });
+
+    merged.crime_rate_per_1000 = perCapitaRate(
+      merged.total_crime_cases,
+      merged.population,
+      1000,
+    );
+    merged.serious_crime_rate_per_10000 = perCapitaRate(
+      merged.serious_crime_cases,
+      merged.population,
+      10000,
+    );
 
     return merged;
   });
@@ -245,8 +260,8 @@ function buildRanks(rows) {
     stationCount: { key: "station_count", direction: "desc" },
     lineCount: { key: "line_count", direction: "desc" },
     accessTime: { key: "average_access_time_min", direction: "asc" },
-    totalCrime: { key: "total_crime_cases", direction: "asc" },
-    seriousCrime: { key: "serious_crime_cases", direction: "asc" },
+    totalCrime: { key: "crime_rate_per_1000", direction: "asc" },
+    seriousCrime: { key: "serious_crime_rate_per_10000", direction: "asc" },
     supermarket: { key: "supermarket_count", direction: "desc" },
     medical: { key: "medical_facility_count", direction: "desc" },
     dailyFacility: { key: "daily_facility_count", direction: "desc" },
@@ -292,13 +307,13 @@ function getStrengths(row, ranks) {
       rank: ranks.accessTime[row.code],
     },
     {
-      label: "犯罪件数が少ない",
-      softLabel: "犯罪件数は比較的少なめ",
+      label: "犯罪率が低い",
+      softLabel: "犯罪率は比較的低め",
       rank: ranks.totalCrime[row.code],
     },
     {
-      label: "重大犯罪が少ない",
-      softLabel: "重大犯罪は比較的少なめ",
+      label: "重大犯罪率が低い",
+      softLabel: "重大犯罪率は比較的低め",
       rank: ranks.seriousCrime[row.code],
     },
     {
@@ -359,7 +374,7 @@ function getCautions(row, ranks) {
     { label: "家賃高め", active: ranks.lowRent[row.code] >= 19 },
     { label: "駅数は少なめ", active: ranks.stationCount[row.code] >= 19 },
     { label: "主要駅まで遠め", active: ranks.accessTime[row.code] >= 19 },
-    { label: "犯罪件数は要確認", active: ranks.totalCrime[row.code] >= 19 },
+    { label: "犯罪率は要確認", active: ranks.totalCrime[row.code] >= 19 },
     { label: "スーパー少なめ", active: ranks.supermarket[row.code] >= 19 },
     { label: "医療施設少なめ", active: ranks.medical[row.code] >= 19 },
     { label: "浸水リスク高め", active: ranks.floodRisk[row.code] >= 19 },
