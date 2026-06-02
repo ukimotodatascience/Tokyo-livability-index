@@ -506,7 +506,7 @@ function renderRanking() {
         </div>
       </div>
       <div class="tag-row">
-        ${renderTags(row.strengths, "tag")}
+        ${renderTags(row.strengths, "tag", "バランス型")}
         ${renderTags(row.cautions, "tag warning")}
       </div>
       <div class="mini-metrics">
@@ -525,9 +525,12 @@ function renderRanking() {
   });
 }
 
-function renderTags(tags, className) {
+function renderTags(tags, className, emptyLabel = "") {
   if (tags.length === 0) {
-    return '<span class="tag">バランス型</span>';
+    if (!emptyLabel) {
+      return "";
+    }
+    return `<span class="tag">${emptyLabel}</span>`;
   }
   return tags.map((tag) => `<span class="${className}">${tag}</span>`).join("");
 }
@@ -797,7 +800,7 @@ function renderDrawer(row) {
           <span class="score-pill">${formatNumber(row.population)}人<span>人口</span></span>
         </div>
         <div class="tag-row">
-          ${renderTags(row.strengths, "tag")}
+          ${renderTags(row.strengths, "tag", "バランス型")}
           ${renderTags(row.cautions, "tag warning")}
         </div>
       </header>
