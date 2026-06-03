@@ -98,10 +98,8 @@ def generate_mock_data():
     return df
 
 
-def fetch_crime_data(use_demo=False):
-    """東京都オープンデータ（警視庁）から犯罪統計を取得する。失敗時やデモモードはモックにフォールバック。"""
-    if use_demo:
-        return generate_mock_data()
+def fetch_crime_data():
+    """東京都オープンデータ（警視庁）から犯罪統計を取得する。"""
 
     logging.info(
         f"警視庁公式サイトから最新の犯罪データをダウンロードします: {CRIME_DATA_URL}"
@@ -194,18 +192,18 @@ def fetch_crime_data(use_demo=False):
                 return df_result
             else:
                 logging.warning(
-                    f"集計された区の数（{len(df_result)}）が23区と一致しません。モックにフォールバックします。"
+                    f"集計された区の数（{len(df_result)}）が23区と一致しません。取得失敗として扱います。"
                 )
-                return generate_mock_data()
+                raise ValueError(
+                    f"Expected crime data for 23 wards, got {len(df_result)}."
+                )
         else:
             raise ValueError("CSVに必要なカラム（市区町丁, 総合計）が見つかりません。")
 
     except Exception as e:
-        logging.error(
-            f"犯罪データのダウンロード・パース中にエラーが発生しました: {e}。モックデータにフォールバックします。"
-        )
-        return generate_mock_data()
+        logging.error(f"犯罪データのダウンロード・パース中にエラーが発生しました: {e}")
+        raise RuntimeError("Failed to fetch and parse crime data.") from e
 
 
 if __name__ == "__main__":
-    fetch_crime_data(use_demo=True)
+    fetch_crime_data()
