@@ -1103,13 +1103,14 @@ function renderDrilldown(row) {
 function renderScoreFormula(row, detail) {
   const metric = metricByKey(detail.metric);
   const formula = detail.evidence
-    .map((item) => `${formatDecimal(item.weight, 2)} × ${item.scoreLabel}`)
+    .map((item) => `${formatDecimal(item.weight, 2)} × ${item.scoreLabel}(0-100点)`)
     .join(" + ");
 
   return `
     <div class="score-formula">
-      <span>計算式</span>
+      <span>計算方法</span>
       <strong>現在のスコア: ${row[metric.key].toFixed(1)}点</strong>
+      <p>各根拠データを23区内で0-100点に正規化してから、重み付けして合成します。</p>
       <p>スコア = ${formula}</p>
     </div>
   `;
