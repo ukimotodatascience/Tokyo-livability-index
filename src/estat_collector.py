@@ -227,8 +227,8 @@ def generate_mock_data(is_actual_stats=True):
     return df
 
 
-def fetch_estat_data(api_key=ESTAT_API_KEY, use_demo=False):
-    """e-Statからデータを取得する。キーの注入確認と、実接続・確定統計フォールバックを制御。"""
+def fetch_estat_data(api_key=ESTAT_API_KEY):
+    """e-Statからデータを取得する。"""
     # 安全にキーの読み込みを確認（セキュリティのため先頭3文字のみログ出力）
     if api_key:
         masked_key = f"{api_key[:3]}***{api_key[-3:]}" if len(api_key) > 6 else "***"
@@ -238,12 +238,8 @@ def fetch_estat_data(api_key=ESTAT_API_KEY, use_demo=False):
     else:
         logging.warning("⚠️ ESTAT_API_KEY が環境変数から検出されませんでした。")
 
-    if use_demo or not api_key:
-        if use_demo:
-            logging.info(
-                "※デモモード（--demo）で動作しているため、確定統計値を使用します。"
-            )
-        return generate_mock_data(is_actual_stats=True)
+    if not api_key:
+        raise ValueError("ESTAT_API_KEY is required to fetch e-Stat data.")
 
     logging.info("e-Stat APIを利用したオンラインデータ取得を試みます...")
     data = None
@@ -266,7 +262,7 @@ def fetch_estat_data(api_key=ESTAT_API_KEY, use_demo=False):
             break  # 成功したらループを抜ける
         except Exception as e:
             if attempt == max_retries:
-                # 最後の試行も失敗した場合は例外を上に投げてフォールバックさせる
+                # 最後の試行も失敗した場合は例外を上に投げる
                 raise e
             logging.warning(
                 f"⚠️ e-Stat API一時的エラーが発生しました。{backoff_seconds}秒後に再試行します... "
@@ -336,9 +332,9 @@ def fetch_estat_data(api_key=ESTAT_API_KEY, use_demo=False):
             pop = ward_data.get(code, {}).get("population", 0)
             if pop <= 0:
                 logging.warning(
-                    f"[{name}] APIから有効な人口データを取得できませんでした。マスタの基準値を使用します。"
+                    f"[{name}] APIから有効な人口データを取得できませんでした。取得失敗として扱います。"
                 )
-                pop = stats["population"]
+                raise ValueError(f"Missing population data for {name} ({code}).")
 
             # 単身世帯比率や住宅面積、家賃はマスタの超精緻な公的確定統計値をハイブリッド適用
             single_rate = stats["single_rate"]
@@ -374,11 +370,9 @@ def fetch_estat_data(api_key=ESTAT_API_KEY, use_demo=False):
         return df
 
     except Exception as e:
-        logging.error(
-            f"e-Stat API取得・パースエラー: {e}。安全のため確定統計マスタ（フォールバック）で生成を継続します。"
-        )
-        return generate_mock_data(is_actual_stats=True)
+        logging.error(f"e-Stat API取得・パースエラー: {e}")
+        raise RuntimeError("Failed to fetch and parse e-Stat data.") from e
 
 
 if __name__ == "__main__":
-    fetch_estat_data(use_demo=True)
+    fetch_estat_data()

@@ -79,7 +79,7 @@ def add_ward_characteristics(df):
     return df
 
 
-def run_pipeline(use_demo=False):
+def run_pipeline():
     logging.info("=========================================")
     logging.info("🚀 東京23区住みやすさインデックス データパイプライン起動")
     logging.info("=========================================")
@@ -87,10 +87,10 @@ def run_pipeline(use_demo=False):
     # 1. 各データソースからデータを収集
     logging.info("Step 1: 各オープンデータソースから収集を開始します...")
 
-    estat_df = fetch_estat_data(use_demo=use_demo)
-    crime_df = fetch_crime_data(use_demo=use_demo)
-    osm_df = fetch_osm_data(use_demo=use_demo)
-    spatial_df = fetch_spatial_data(use_demo=use_demo)
+    estat_df = fetch_estat_data()
+    crime_df = fetch_crime_data()
+    osm_df = fetch_osm_data()
+    spatial_df = fetch_spatial_data()
 
     # 2. データのマージ
     logging.info("Step 2: 収集したデータを区コード（JISコード）でマージします...")
@@ -317,6 +317,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # --real が指定された場合は実データモード（use_demo=False）、指定なしはデモモード（use_demo=True）
-    use_demo = not args.real
-    run_pipeline(use_demo=use_demo)
+    # The pipeline always fetches source data; demo generation is disabled.
+    run_pipeline()

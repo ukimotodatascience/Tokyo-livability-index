@@ -312,9 +312,9 @@ def fetch_spatial_data_online():
             station_ok = True
         except Exception as e:
             logging.warning(
-                f"[{name}] 駅数のオンライン取得に3回失敗しました。公式統計基準値で補正します。理由: {e}"
+                f"[{name}] 駅数のオンライン取得に3回失敗しました。取得失敗として扱います。理由: {e}"
             )
-            stations = MOCK_SPATIAL_STATS[code]["stations"]
+            raise RuntimeError(f"Failed to fetch station count for {name}.") from e
 
         # 2.2 避難所数の取得実行
         shelter_ok = False
@@ -323,9 +323,9 @@ def fetch_spatial_data_online():
             shelter_ok = True
         except Exception as e:
             logging.warning(
-                f"[{name}] 避難所数のオンライン取得に3回失敗しました。公式統計基準値で補正します。理由: {e}"
+                f"[{name}] 避難所数のオンライン取得に3回失敗しました。取得失敗として扱います。理由: {e}"
             )
-            shelters = MOCK_SPATIAL_STATS[code]["shelters"]
+            raise RuntimeError(f"Failed to fetch shelter count for {name}.") from e
 
         stats = MOCK_SPATIAL_STATS[code]
         stations_val = stations if stations is not None else stats["stations"]
@@ -365,13 +365,10 @@ def fetch_spatial_data_online():
     return df
 
 
-def fetch_spatial_data(use_demo=False):
+def fetch_spatial_data():
     """空間統計データを取得・処理する"""
-    if use_demo:
-        return generate_mock_data()
-    else:
-        return fetch_spatial_data_online()
+    return fetch_spatial_data_online()
 
 
 if __name__ == "__main__":
-    fetch_spatial_data(use_demo=True)
+    fetch_spatial_data()

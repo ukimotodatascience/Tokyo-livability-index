@@ -141,17 +141,8 @@ def query_overpass_for_ward(ward_name, poi_type, max_retries=3, backoff_seconds=
             time.sleep(backoff_seconds)
 
 
-def fallback_count(code, poi_type):
-    stats = MOCK_OSM_STATS[code]
-    if poi_type == "post_office":
-        return int(stats["convenience"] * 0.10)
-    return stats[poi_type]
-
-
-def fetch_osm_data(use_demo=False):
-    """Fetch POI counts from OSM in real mode; use fixed demo data otherwise."""
-    if use_demo:
-        return generate_mock_data()
+def fetch_osm_data():
+    """Fetch POI counts from OSM."""
 
     rows = []
     for code, name in TOKYO_23_WARDS.items():
@@ -160,10 +151,7 @@ def fetch_osm_data(use_demo=False):
             time.sleep(0.3)
             count = query_overpass_for_ward(name, poi_type)
             if count is None:
-                count = fallback_count(code, poi_type)
-                logging.warning(
-                    "[%s] using fallback %s count: %s", name, poi_type, count
-                )
+                raise RuntimeError(f"Failed to fetch OSM {poi_type} count for {name}.")
             counts[poi_type] = count
 
         rows.append(
@@ -187,4 +175,4 @@ def fetch_osm_data(use_demo=False):
 
 
 if __name__ == "__main__":
-    fetch_osm_data(use_demo=True)
+    fetch_osm_data()
