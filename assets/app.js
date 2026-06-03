@@ -1,5 +1,6 @@
 const DATA_PATHS = {
   index: "data/processed/tokyo_livability_index.csv",
+  estat: "data/raw/estat_data.csv",
   spatial: "data/raw/spatial_data.csv",
   crime: "data/raw/crime_data.csv",
   poi: "data/raw/osm_poi_data.csv",
@@ -111,6 +112,10 @@ function perCapitaRate(count, population, scale) {
   return population > 0 ? (count / population) * scale : 0;
 }
 
+function densityPerKm2(count, areaKm2) {
+  return areaKm2 > 0 ? count / areaKm2 : 0;
+}
+
 function formatNumber(value) {
   return new Intl.NumberFormat("ja-JP").format(Math.round(value));
 }
@@ -119,14 +124,23 @@ function formatRent(value) {
   return `${formatNumber(value)}円`;
 }
 
+function formatDecimal(value, digits = 1) {
+  return Number(value).toFixed(digits);
+}
+
+function formatPercent(value) {
+  return `${formatDecimal(value * 100, 1)}%`;
+}
+
 function metricByKey(key) {
   return SCORE_METRICS.find((metric) => metric.key === key);
 }
 
 async function loadData() {
-  const { indexText, spatialText, crimeText, poiText, geojson } =
+  const { indexText, estatText, spatialText, crimeText, poiText, geojson } =
     await loadSourceData();
 
+  const estatByCode = Object.fromEntries(parseCsv(estatText).map((row) => [row.code, row]));
   const spatialByCode = Object.fromEntries(parseCsv(spatialText).map((row) => [row.code, row]));
   const crimeByCode = Object.fromEntries(parseCsv(crimeText).map((row) => [row.code, row]));
   const poiByCode = Object.fromEntries(parseCsv(poiText).map((row) => [row.code, row]));
@@ -134,6 +148,7 @@ async function loadData() {
   state.rows = parseCsv(indexText).map((row) => {
     const merged = {
       ...row,
+      ...estatByCode[row.code],
       ...spatialByCode[row.code],
       ...crimeByCode[row.code],
       ...poiByCode[row.code],
@@ -142,7 +157,13 @@ async function loadData() {
 
     [
       "population",
+      "households",
+      "single_household_rate",
+      "single_households",
       "average_rent",
+      "average_floor_space",
+      "ward_area_km2",
+      "income_proxy",
       "score_affordability",
       "score_accessibility",
       "score_safety",
@@ -178,6 +199,30 @@ async function loadData() {
       merged.population,
       10000,
     );
+    merged.shelter_rate_per_10000 = perCapitaRate(
+      merged.shelter_count,
+      merged.population,
+      10000,
+    );
+    merged.station_density = densityPerKm2(merged.station_count, merged.ward_area_km2);
+    merged.convenience_density = densityPerKm2(
+      merged.convenience_count,
+      merged.ward_area_km2,
+    );
+    merged.supermarket_density = densityPerKm2(
+      merged.supermarket_count,
+      merged.ward_area_km2,
+    );
+    merged.medical_density = densityPerKm2(
+      merged.medical_facility_count,
+      merged.ward_area_km2,
+    );
+    merged.daily_facility_density = densityPerKm2(
+      merged.daily_facility_count,
+      merged.ward_area_km2,
+    );
+    merged.rent_burden_index =
+      merged.income_proxy > 0 ? merged.average_rent / (merged.income_proxy * 10000) : 0;
 
     return merged;
   });
@@ -187,15 +232,16 @@ async function loadData() {
 
 async function loadSourceData() {
   try {
-    const [indexText, spatialText, crimeText, poiText, geojson] = await Promise.all([
+    const [indexText, estatText, spatialText, crimeText, poiText, geojson] = await Promise.all([
       fetchText(DATA_PATHS.index),
+      fetchText(DATA_PATHS.estat),
       fetchText(DATA_PATHS.spatial),
       fetchText(DATA_PATHS.crime),
       fetchText(DATA_PATHS.poi),
       fetchJson(DATA_PATHS.geojson),
     ]);
 
-    return { indexText, spatialText, crimeText, poiText, geojson };
+    return { indexText, estatText, spatialText, crimeText, poiText, geojson };
   } catch (error) {
     if (window.TOKYO_LIVABILITY_EMBEDDED_DATA) {
       console.info("Using embedded data fallback.", error);
@@ -879,54 +925,144 @@ function renderDrilldown(row) {
     {
       metric: "score_affordability",
       evidence: [
-        ["平均家賃", formatRent(row.average_rent)],
-        ["人口", `${formatNumber(row.population)}人`],
+        {
+          label: "平均家賃",
+          value: formatRent(row.average_rent),
+          scoreLabel: "家賃の安さ",
+          weight: 0.5,
+        },
+        {
+          label: "単身世帯比率",
+          value: formatPercent(row.single_household_rate),
+          scoreLabel: "単身向き住宅環境",
+          weight: 0.3,
+        },
+        {
+          label: "家賃負担指数",
+          value: formatDecimal(row.rent_burden_index, 3),
+          scoreLabel: "家賃負担の軽さ",
+          weight: 0.2,
+        },
       ],
       note: "家賃スコアは、平均家賃や家賃負担の軽さを中心に見ています。",
     },
     {
       metric: "score_accessibility",
       evidence: [
-        ["駅数", `${row.station_count}駅`],
-        ["路線数", `${row.line_count}路線`],
-        ["主要駅への平均アクセス", `${row.average_access_time_min}分`],
+        {
+          label: "駅密度",
+          value: `${formatDecimal(row.station_density, 2)}駅/km²`,
+          scoreLabel: "駅密度スコア",
+          weight: 0.4,
+        },
+        {
+          label: "路線数",
+          value: `${row.line_count}路線`,
+          scoreLabel: "路線数スコア",
+          weight: 0.2,
+        },
+        {
+          label: "主要駅への平均アクセス",
+          value: `${formatDecimal(row.average_access_time_min, 1)}分`,
+          scoreLabel: "アクセス時間の短さ",
+          weight: 0.4,
+        },
       ],
       note: "駅の密度、路線数、主要駅への移動時間から交通アクセスを見ています。",
     },
     {
       metric: "score_safety",
       evidence: [
-        ["総犯罪件数", `${formatNumber(row.total_crime_cases)}件`],
-        ["重大犯罪件数", `${formatNumber(row.serious_crime_cases)}件`],
-        ["暴力犯罪件数", `${formatNumber(row.violent_crime_cases)}件`],
-        ["窃盗件数", `${formatNumber(row.theft_crime_cases)}件`],
+        {
+          label: "人口1,000人あたり犯罪件数",
+          value: `${formatDecimal(row.crime_rate_per_1000, 2)}件`,
+          scoreLabel: "犯罪件数の少なさ",
+          weight: 0.7,
+        },
+        {
+          label: "人口10,000人あたり重大犯罪件数",
+          value: `${formatDecimal(row.serious_crime_rate_per_10000, 2)}件`,
+          scoreLabel: "重大犯罪の少なさ",
+          weight: 0.3,
+        },
       ],
       note: "人口あたりの犯罪件数と重大犯罪の少なさを中心に治安を見ています。",
     },
     {
       metric: "score_convenience",
       evidence: [
-        ["コンビニ", `${formatNumber(row.convenience_count)}件`],
-        ["スーパー", `${formatNumber(row.supermarket_count)}件`],
-        ["医療施設", `${formatNumber(row.medical_facility_count)}件`],
-        ["日常施設", `${formatNumber(row.daily_facility_count)}件`],
+        {
+          label: "コンビニ密度",
+          value: `${formatDecimal(row.convenience_density, 2)}件/km²`,
+          scoreLabel: "コンビニ密度スコア",
+          weight: 0.25,
+        },
+        {
+          label: "スーパー密度",
+          value: `${formatDecimal(row.supermarket_density, 2)}件/km²`,
+          scoreLabel: "スーパー密度スコア",
+          weight: 0.25,
+        },
+        {
+          label: "医療施設密度",
+          value: `${formatDecimal(row.medical_density, 2)}件/km²`,
+          scoreLabel: "医療施設密度スコア",
+          weight: 0.3,
+        },
+        {
+          label: "日常施設密度",
+          value: `${formatDecimal(row.daily_facility_density, 2)}件/km²`,
+          scoreLabel: "日常施設密度スコア",
+          weight: 0.2,
+        },
       ],
       note: "日々の買い物や医療アクセスに関わる施設数を見ています。",
     },
     {
       metric: "score_livability",
       evidence: [
-        ["平均家賃", formatRent(row.average_rent)],
-        ["人口", `${formatNumber(row.population)}人`],
+        {
+          label: "単身世帯比率",
+          value: formatPercent(row.single_household_rate),
+          scoreLabel: "単身世帯比率スコア",
+          weight: 0.3,
+        },
+        {
+          label: "平均住宅面積",
+          value: `${formatDecimal(row.average_floor_space, 1)}m²`,
+          scoreLabel: "住宅面積スコア",
+          weight: 0.25,
+        },
+        {
+          label: "快適性補正",
+          value: "単身世帯比率と住宅面積の平均",
+          scoreLabel: "快適性補正スコア",
+          weight: 0.45,
+        },
       ],
       note: "この指標は総合点ではなく、一人暮らしや住居面の快適性に近い評価です。",
     },
     {
       metric: "score_resilience",
       evidence: [
-        ["浸水リスク面積率", `${Math.round(row.flood_risk_area_rate * 100)}%`],
-        ["地震ハザードランク", row.earthquake_hazard_rank.toFixed(1)],
-        ["避難所数", `${formatNumber(row.shelter_count)}か所`],
+        {
+          label: "浸水リスク面積率",
+          value: formatPercent(row.flood_risk_area_rate),
+          scoreLabel: "浸水リスクの低さ",
+          weight: 0.4,
+        },
+        {
+          label: "地震ハザードランク",
+          value: formatDecimal(row.earthquake_hazard_rank, 1),
+          scoreLabel: "地震リスクの低さ",
+          weight: 0.3,
+        },
+        {
+          label: "人口10,000人あたり避難所数",
+          value: `${formatDecimal(row.shelter_rate_per_10000, 2)}か所`,
+          scoreLabel: "避難所の多さ",
+          weight: 0.3,
+        },
       ],
       note: "浸水リスク、地震ハザード、避難所数を使って防災面を見ています。",
     },
@@ -942,12 +1078,20 @@ function renderDrilldown(row) {
             <span>${row[metric.key].toFixed(1)}</span>
           </summary>
           <div class="drilldown-body">
-            ${renderBarList(row, detail.metric)}
             <div class="evidence-grid">
               ${detail.evidence
-                .map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`)
+                .map(
+                  (item) => `
+                    <div>
+                      <span>${item.label}</span>
+                      <strong>${item.value}</strong>
+                      <small>${item.scoreLabel}</small>
+                    </div>
+                  `,
+                )
                 .join("")}
             </div>
+            ${renderScoreFormula(row, detail)}
             <p>${detail.note}</p>
           </div>
         </details>
@@ -956,19 +1100,18 @@ function renderDrilldown(row) {
     .join("");
 }
 
-function renderBarList(row, activeMetric) {
+function renderScoreFormula(row, detail) {
+  const metric = metricByKey(detail.metric);
+  const formula = detail.evidence
+    .map((item) => `${formatDecimal(item.weight, 2)} × ${item.scoreLabel}(0-100点)`)
+    .join(" + ");
+
   return `
-    <div class="bar-list">
-      ${SCORE_METRICS.map((metric) => {
-        const value = row[metric.key];
-        return `
-          <div class="bar-row">
-            <span>${metric.label}</span>
-            <span class="bar-track"><span class="bar-fill" style="width: ${value}%"></span></span>
-            <span>${value.toFixed(1)}</span>
-          </div>
-        `;
-      }).join("")}
+    <div class="score-formula">
+      <span>計算方法</span>
+      <strong>現在のスコア: ${row[metric.key].toFixed(1)}点</strong>
+      <p>各根拠データを23区内で0-100点に正規化してから、重み付けして合成します。</p>
+      <p>スコア = ${formula}</p>
     </div>
   `;
 }
