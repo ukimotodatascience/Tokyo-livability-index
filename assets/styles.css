@@ -126,7 +126,8 @@ main {
 .control-panel,
 .map-panel,
 .ranking-panel,
-.compare-panel {
+.compare-panel,
+.data-attribution {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -340,7 +341,8 @@ select {
 
 .map-panel,
 .ranking-panel,
-.compare-panel {
+.compare-panel,
+.data-attribution {
   padding: 22px;
 }
 
@@ -531,6 +533,66 @@ select {
 .compare-panel {
   display: grid;
   gap: 16px;
+}
+
+.data-attribution {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+  box-shadow: none;
+}
+
+.data-attribution p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.source-disclosure {
+  min-width: min(280px, 100%);
+}
+
+.source-disclosure summary {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  cursor: pointer;
+  font-weight: 800;
+  list-style-position: inside;
+}
+
+.source-content {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.source-content ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.source-content p {
+  margin: 0;
+  font-size: inherit;
+}
+
+.source-content a {
+  color: var(--accent-strong);
+  font-weight: 800;
 }
 
 .compare-empty {
@@ -743,6 +805,7 @@ select {
   .header-stats,
   .filters-grid,
   .inline-heading,
+  .data-attribution,
   .mini-metrics,
   .evidence-grid {
     grid-template-columns: 1fr;
