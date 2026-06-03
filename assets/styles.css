@@ -18,6 +18,10 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -26,6 +30,7 @@ body {
     "Inter", "Noto Sans JP", "Yu Gothic", "Hiragino Kaku Gothic ProN", Meiryo,
     sans-serif;
   line-height: 1.6;
+  overflow-x: hidden;
 }
 
 button,
@@ -36,6 +41,25 @@ input {
 
 button {
   cursor: pointer;
+}
+
+svg,
+table {
+  max-width: 100%;
+}
+
+a,
+button,
+h1,
+h2,
+h3,
+p,
+span,
+small,
+summary,
+td,
+th {
+  overflow-wrap: anywhere;
 }
 
 .site-header {
@@ -91,10 +115,12 @@ h3 {
 
 .header-stats {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
 .header-stats > div {
+  flex: 1 1 92px;
   min-width: 92px;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -121,6 +147,7 @@ main {
   display: grid;
   gap: 24px;
   padding: 24px clamp(16px, 4vw, 48px) 48px;
+  width: 100%;
 }
 
 .control-panel,
@@ -151,9 +178,13 @@ main {
   gap: 16px;
 }
 
+.inline-heading > * {
+  min-width: 0;
+}
+
 .preset-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -195,7 +226,7 @@ main {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(min(220px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -301,6 +332,7 @@ select {
 
 .priority-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -334,7 +366,7 @@ select {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(380px, 1.1fr) minmax(360px, 0.9fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
   gap: 24px;
   align-items: start;
 }
@@ -348,7 +380,7 @@ select {
 
 .map-shell {
   position: relative;
-  min-height: 560px;
+  height: clamp(360px, 54vw, 560px);
   margin-top: 18px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -358,7 +390,7 @@ select {
 
 #ward-map {
   width: 100%;
-  height: 560px;
+  height: 100%;
   display: block;
 }
 
@@ -515,12 +547,14 @@ select {
 
 .card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .detail-button,
 .compare-button,
 .ghost-button {
+  flex: 1 1 132px;
   padding: 0 12px;
 }
 
@@ -537,7 +571,7 @@ select {
 
 .data-attribution {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
   gap: 18px;
   align-items: start;
   box-shadow: none;
@@ -551,7 +585,8 @@ select {
 }
 
 .source-disclosure {
-  min-width: min(280px, 100%);
+  width: 100%;
+  min-width: 0;
 }
 
 .source-disclosure summary {
@@ -576,6 +611,7 @@ select {
   background: var(--surface-muted);
   color: var(--muted);
   font-size: 0.88rem;
+  overflow-wrap: anywhere;
 }
 
 .source-content ul {
@@ -605,6 +641,7 @@ select {
 
 .compare-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .compare-table {
@@ -795,6 +832,28 @@ select {
     justify-content: start;
   }
 
+  .ranking-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .preset-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .data-attribution {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .inline-heading {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -802,10 +861,7 @@ select {
     padding-top: 32px;
   }
 
-  .header-stats,
   .filters-grid,
-  .inline-heading,
-  .data-attribution,
   .mini-metrics,
   .evidence-grid {
     grid-template-columns: 1fr;
@@ -825,11 +881,61 @@ select {
 
   .map-shell,
   #ward-map {
-    min-height: 420px;
     height: 420px;
   }
 
   .drawer-panel {
     padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    gap: 16px;
+    padding: 16px 12px 36px;
+  }
+
+  .control-panel,
+  .map-panel,
+  .ranking-panel,
+  .compare-panel,
+  .data-attribution {
+    padding: 16px;
+  }
+
+  .preset-button,
+  .condition-chip,
+  .detail-button,
+  .compare-button,
+  .ghost-button {
+    width: 100%;
+  }
+
+  .priority-item {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .priority-actions {
+    justify-content: stretch;
+  }
+
+  .priority-button {
+    flex: 1 1 42px;
+  }
+
+  .map-shell,
+  #ward-map {
+    height: 360px;
+  }
+
+  .drawer-panel {
+    padding: 16px;
+  }
+
+  .bar-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
