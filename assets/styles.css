@@ -601,6 +601,15 @@ select {
   color: #fff;
 }
 
+.ranking-toggle {
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
 .compare-panel {
   display: grid;
   gap: 16px;
@@ -822,31 +831,41 @@ select {
   margin-top: 2px;
 }
 
-.bar-list {
-  display: grid;
-  gap: 10px;
+.evidence-grid small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
-.bar-row {
+.score-formula {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) 44px;
-  gap: 10px;
-  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.score-formula span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.score-formula strong {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.score-formula p {
+  margin: 0;
+  color: var(--text);
   font-size: 0.86rem;
   font-weight: 700;
-}
-
-.bar-track {
-  height: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e8e3da;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
+  line-height: 1.5;
 }
 
 .empty-state,
@@ -975,10 +994,5 @@ select {
 
   .drawer-panel {
     padding: 16px;
-  }
-
-  .bar-row {
-    grid-template-columns: 1fr;
-    gap: 6px;
   }
 }
