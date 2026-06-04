@@ -75,6 +75,8 @@ const state = {
 };
 
 const elements = {
+  advancedSettingsPanel: document.querySelector("#advanced-settings-panel"),
+  advancedSettingsToggle: document.querySelector("#advanced-settings-toggle"),
   priorityBuilder: document.querySelector("#priority-builder"),
   rankingList: document.querySelector("#ranking-list"),
   resultCount: document.querySelector("#result-count"),
@@ -980,11 +982,19 @@ function update() {
   renderCompare();
 }
 
+function toggleAdvancedSettings() {
+  const shouldShow = elements.advancedSettingsPanel.hidden;
+  elements.advancedSettingsPanel.hidden = !shouldShow;
+  elements.advancedSettingsToggle.setAttribute("aria-expanded", `${shouldShow}`);
+  elements.advancedSettingsToggle.textContent = shouldShow ? "閉じる" : "表示する";
+}
+
 function bindEvents() {
   document.querySelectorAll(".preset-button").forEach((button) => {
     button.addEventListener("click", () => applyPreset(button.dataset.preset));
   });
 
+  elements.advancedSettingsToggle.addEventListener("click", toggleAdvancedSettings);
   elements.priorityBuilder.addEventListener("click", syncPriorityFromInteraction);
 
   [elements.rentLimit, elements.sortMode, elements.mapMetric].forEach((element) => {
