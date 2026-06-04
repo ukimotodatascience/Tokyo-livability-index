@@ -66,12 +66,16 @@ const PRESETS = {
   resilience: ["resilience", "safety", "livability", "affordability"],
 };
 
+const MOBILE_RANKING_LIMIT = 4;
+const mobileRankingQuery = window.matchMedia("(max-width: 640px)");
+
 const state = {
   rows: [],
   geojson: null,
   priority: [...PRESETS.balanced],
   compareCodes: [],
   selectedCode: null,
+  isRankingExpanded: false,
 };
 
 const elements = {
@@ -489,6 +493,7 @@ function setActivePreset(presetName) {
 
 function applyPreset(presetName) {
   state.priority = [...PRESETS[presetName]];
+  state.isRankingExpanded = false;
   setActivePreset(presetName);
   renderPriorityBuilder();
   update();
@@ -496,6 +501,11 @@ function applyPreset(presetName) {
 
 function renderRanking() {
   const rows = getFilteredRows();
+  const shouldLimitRows =
+    mobileRankingQuery.matches &&
+    !state.isRankingExpanded &&
+    rows.length > MOBILE_RANKING_LIMIT;
+  const visibleRows = shouldLimitRows ? rows.slice(0, MOBILE_RANKING_LIMIT) : rows;
   elements.resultCount.textContent = `${rows.length}区`;
   elements.rankingList.innerHTML = "";
 
@@ -505,7 +515,7 @@ function renderRanking() {
     return;
   }
 
-  rows.forEach((row, index) => {
+  visibleRows.forEach((row, index) => {
     const card = document.createElement("article");
     card.className = "ward-card";
     card.classList.toggle("is-selected", row.code === state.selectedCode);
@@ -538,6 +548,21 @@ function renderRanking() {
     `;
     elements.rankingList.append(card);
   });
+
+  if (mobileRankingQuery.matches && rows.length > MOBILE_RANKING_LIMIT) {
+    const toggleButton = document.createElement("button");
+    toggleButton.className = "ranking-toggle";
+    toggleButton.type = "button";
+    toggleButton.dataset.rankingToggle = "true";
+    toggleButton.setAttribute(
+      "aria-expanded",
+      state.isRankingExpanded ? "true" : "false",
+    );
+    toggleButton.textContent = state.isRankingExpanded
+      ? "表示を減らす"
+      : `すべて表示（${rows.length}区）`;
+    elements.rankingList.append(toggleButton);
+  }
 }
 
 function renderTags(tags, className, emptyLabel = "") {
@@ -731,12 +756,18 @@ function toggleCompare(code) {
   update();
 }
 
+function toggleRankingExpansion() {
+  state.isRankingExpanded = !state.isRankingExpanded;
+  renderRanking();
+}
+
 function toggleCondition(weightKey) {
   if (state.priority.includes(weightKey)) {
     state.priority = state.priority.filter((item) => item !== weightKey);
   } else {
     state.priority = [...state.priority, weightKey];
   }
+  state.isRankingExpanded = false;
   setActivePreset(null);
   renderPriorityBuilder();
   update();
@@ -764,6 +795,7 @@ function movePriority(weightKey, direction) {
     nextPriority[currentIndex],
   ];
   state.priority = nextPriority;
+  state.isRankingExpanded = false;
   setActivePreset(null);
   renderPriorityBuilder();
   update();
@@ -988,12 +1020,22 @@ function bindEvents() {
   elements.priorityBuilder.addEventListener("click", syncPriorityFromInteraction);
 
   [elements.rentLimit, elements.sortMode, elements.mapMetric].forEach((element) => {
-    element.addEventListener("change", update);
+    element.addEventListener("change", () => {
+      if (element !== elements.mapMetric) {
+        state.isRankingExpanded = false;
+      }
+      update();
+    });
   });
 
   elements.rankingList.addEventListener("click", (event) => {
+    const toggleButton = event.target.closest("[data-ranking-toggle]");
     const detailButton = event.target.closest("[data-detail]");
     const compareButton = event.target.closest("[data-compare]");
+    if (toggleButton) {
+      toggleRankingExpansion();
+      return;
+    }
     if (detailButton) {
       openDrawer(detailButton.dataset.detail);
     }
@@ -1016,6 +1058,8 @@ function bindEvents() {
       closeDrawer();
     }
   });
+
+  mobileRankingQuery.addEventListener("change", renderRanking);
 }
 
 async function init() {

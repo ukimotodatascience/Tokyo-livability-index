@@ -564,6 +564,15 @@ select {
   color: #fff;
 }
 
+.ranking-toggle {
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
 .compare-panel {
   display: grid;
   gap: 16px;
