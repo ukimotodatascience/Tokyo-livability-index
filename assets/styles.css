@@ -201,6 +201,43 @@ main {
   font-weight: 700;
 }
 
+.settings-toggle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: -8px;
+}
+
+.settings-toggle-row .settings-heading {
+  margin-bottom: 0;
+}
+
+.settings-toggle-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.settings-toggle-button[aria-expanded="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.advanced-settings-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.advanced-settings-panel[hidden] {
+  display: none;
+}
+
 .preset-button,
 .ghost-button,
 .detail-button,
@@ -880,6 +917,11 @@ select {
     padding-top: 32px;
   }
 
+  .settings-toggle-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
   .filters-grid,
   .mini-metrics,
   .evidence-grid {
@@ -926,7 +968,8 @@ select {
   .condition-chip,
   .detail-button,
   .compare-button,
-  .ghost-button {
+  .ghost-button,
+  .settings-toggle-button {
     width: 100%;
   }
 

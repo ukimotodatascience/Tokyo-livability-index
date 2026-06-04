@@ -87,11 +87,24 @@
           </label>
         </div>
 
-        <div class="settings-heading">
-          <span>詳細設定</span>
-          <small>重視する観点を選び、上から順に優先度を並べます。</small>
+        <div class="settings-toggle-row">
+          <div class="settings-heading">
+            <span>詳細設定</span>
+            <small>重視する観点を選び、上から順に優先度を並べます。</small>
+          </div>
+          <button
+            class="settings-toggle-button"
+            id="advanced-settings-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="advanced-settings-panel"
+          >
+            表示する
+          </button>
         </div>
-        <div class="priority-builder" id="priority-builder"></div>
+        <div class="advanced-settings-panel" id="advanced-settings-panel" hidden>
+          <div class="priority-builder" id="priority-builder"></div>
+        </div>
       </section>
 
       <section class="dashboard-grid" aria-label="おすすめ結果">
