@@ -1012,6 +1012,17 @@ function update() {
   renderCompare();
 }
 
+function watchMediaQuery(mediaQueryList, handler) {
+  if (typeof mediaQueryList.addEventListener === "function") {
+    mediaQueryList.addEventListener("change", handler);
+    return;
+  }
+
+  if (typeof mediaQueryList.addListener === "function") {
+    mediaQueryList.addListener(handler);
+  }
+}
+
 function bindEvents() {
   document.querySelectorAll(".preset-button").forEach((button) => {
     button.addEventListener("click", () => applyPreset(button.dataset.preset));
@@ -1059,7 +1070,7 @@ function bindEvents() {
     }
   });
 
-  mobileRankingQuery.addEventListener("change", renderRanking);
+  watchMediaQuery(mobileRankingQuery, renderRanking);
 }
 
 async function init() {
