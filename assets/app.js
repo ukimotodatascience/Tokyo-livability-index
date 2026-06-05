@@ -9,62 +9,45 @@ const DATA_PATHS = {
 
 const SCORE_METRICS = [
   {
-    key: "score_affordability",
-    weightKey: "affordability",
-    label: "家賃",
-    detailLabel: "家賃・コスト",
-    positive: "家賃負担が軽い",
-    caution: "家賃負担が重い",
-  },
-  {
     key: "score_accessibility",
     weightKey: "accessibility",
     label: "アクセス",
-    detailLabel: "交通アクセス",
-    positive: "アクセスが良い",
-    caution: "アクセスは控えめ",
+    detailLabel: "鉄道アクセス",
+    positive: "人口あたりの駅数が多い",
+    caution: "人口あたりの駅数は控えめ",
   },
   {
     key: "score_safety",
     weightKey: "safety",
     label: "治安",
     detailLabel: "治安",
-    positive: "治安が良い",
-    caution: "治安は要確認",
+    positive: "人口あたりの犯罪件数が少ない",
+    caution: "人口あたりの犯罪件数は要確認",
   },
   {
     key: "score_convenience",
     weightKey: "convenience",
     label: "生活利便性",
     detailLabel: "生活利便性",
-    positive: "生活利便性が高い",
-    caution: "生活利便性は控えめ",
-  },
-  {
-    key: "score_livability",
-    weightKey: "livability",
-    label: "居住快適性",
-    detailLabel: "一人暮らし快適性",
-    positive: "居住快適性が高い",
-    caution: "居住快適性は控えめ",
+    positive: "人口あたりの生活施設が多い",
+    caution: "人口あたりの生活施設は控えめ",
   },
   {
     key: "score_resilience",
     weightKey: "resilience",
-    label: "防災",
-    detailLabel: "防災・災害リスク",
-    positive: "防災面が強い",
-    caution: "災害リスクは要確認",
+    label: "避難所",
+    detailLabel: "避難所",
+    positive: "人口あたりの避難所が多い",
+    caution: "人口あたりの避難所は控えめ",
   },
 ];
 
 const PRESETS = {
   balanced: [],
-  budget: ["affordability", "safety", "livability", "convenience"],
-  safety: ["safety", "resilience", "affordability", "convenience"],
-  access: ["accessibility", "convenience", "affordability", "safety"],
-  convenience: ["convenience", "accessibility", "affordability", "safety"],
-  resilience: ["resilience", "safety", "livability", "affordability"],
+  safety: ["safety", "resilience", "accessibility", "convenience"],
+  access: ["accessibility", "convenience", "safety", "resilience"],
+  convenience: ["convenience", "accessibility", "safety", "resilience"],
+  resilience: ["resilience", "safety", "accessibility", "convenience"],
 };
 
 const MOBILE_RANKING_LIMIT = 4;
@@ -85,7 +68,6 @@ const elements = {
   priorityBuilder: document.querySelector("#priority-builder"),
   rankingList: document.querySelector("#ranking-list"),
   resultCount: document.querySelector("#result-count"),
-  rentLimit: document.querySelector("#rent-limit"),
   sortMode: document.querySelector("#sort-mode"),
   mapMetric: document.querySelector("#map-metric"),
   wardMap: document.querySelector("#ward-map"),
@@ -98,6 +80,10 @@ const elements = {
 
 function parseCsv(text) {
   const cleanText = text.replace(/^\uFEFF/, "").trim();
+  if (!cleanText) {
+    return [];
+  }
+
   const [headerLine, ...lines] = cleanText.split(/\r?\n/);
   const headers = headerLine.split(",");
   return lines.map((line) => {
@@ -118,24 +104,12 @@ function perCapitaRate(count, population, scale) {
   return population > 0 ? (count / population) * scale : 0;
 }
 
-function densityPerKm2(count, areaKm2) {
-  return areaKm2 > 0 ? count / areaKm2 : 0;
-}
-
 function formatNumber(value) {
   return new Intl.NumberFormat("ja-JP").format(Math.round(value));
 }
 
-function formatRent(value) {
-  return `${formatNumber(value)}円`;
-}
-
 function formatDecimal(value, digits = 1) {
   return Number(value).toFixed(digits);
-}
-
-function formatPercent(value) {
-  return `${formatDecimal(value * 100, 1)}%`;
 }
 
 function metricByKey(key) {
@@ -163,24 +137,11 @@ async function loadData() {
 
     [
       "population",
-      "households",
-      "single_household_rate",
-      "single_households",
-      "average_rent",
-      "average_floor_space",
-      "ward_area_km2",
-      "income_proxy",
-      "score_affordability",
       "score_accessibility",
       "score_safety",
       "score_convenience",
-      "score_livability",
       "score_resilience",
       "station_count",
-      "line_count",
-      "average_access_time_min",
-      "flood_risk_area_rate",
-      "earthquake_hazard_rank",
       "shelter_count",
       "total_crime_cases",
       "serious_crime_cases",
@@ -205,30 +166,36 @@ async function loadData() {
       merged.population,
       10000,
     );
-    merged.shelter_rate_per_10000 = perCapitaRate(
+    merged.station_rate_per_100000 = perCapitaRate(
+      merged.station_count,
+      merged.population,
+      100000,
+    );
+    merged.shelter_rate_per_100000 = perCapitaRate(
       merged.shelter_count,
       merged.population,
-      10000,
+      100000,
     );
-    merged.station_density = densityPerKm2(merged.station_count, merged.ward_area_km2);
-    merged.convenience_density = densityPerKm2(
+    merged.convenience_rate_per_100000 = perCapitaRate(
       merged.convenience_count,
-      merged.ward_area_km2,
+      merged.population,
+      100000,
     );
-    merged.supermarket_density = densityPerKm2(
+    merged.supermarket_rate_per_100000 = perCapitaRate(
       merged.supermarket_count,
-      merged.ward_area_km2,
+      merged.population,
+      100000,
     );
-    merged.medical_density = densityPerKm2(
+    merged.medical_rate_per_100000 = perCapitaRate(
       merged.medical_facility_count,
-      merged.ward_area_km2,
+      merged.population,
+      100000,
     );
-    merged.daily_facility_density = densityPerKm2(
+    merged.daily_facility_rate_per_100000 = perCapitaRate(
       merged.daily_facility_count,
-      merged.ward_area_km2,
+      merged.population,
+      100000,
     );
-    merged.rent_burden_index =
-      merged.income_proxy > 0 ? merged.average_rent / (merged.income_proxy * 10000) : 0;
 
     return merged;
   });
@@ -238,14 +205,15 @@ async function loadData() {
 
 async function loadSourceData() {
   try {
-    const [indexText, estatText, spatialText, crimeText, poiText, geojson] = await Promise.all([
-      fetchText(DATA_PATHS.index),
-      fetchText(DATA_PATHS.estat),
-      fetchText(DATA_PATHS.spatial),
-      fetchText(DATA_PATHS.crime),
-      fetchText(DATA_PATHS.poi),
-      fetchJson(DATA_PATHS.geojson),
-    ]);
+    const [indexText, estatText, spatialText, crimeText, poiText, geojson] =
+      await Promise.all([
+        fetchText(DATA_PATHS.index),
+        fetchText(DATA_PATHS.estat),
+        fetchText(DATA_PATHS.spatial),
+        fetchText(DATA_PATHS.crime),
+        fetchText(DATA_PATHS.poi),
+        fetchJson(DATA_PATHS.geojson),
+      ]);
 
     return { indexText, estatText, spatialText, crimeText, poiText, geojson };
   } catch (error) {
@@ -308,18 +276,13 @@ function enrichRows() {
 
 function buildRanks(rows) {
   const rankDefinitions = {
-    lowRent: { key: "average_rent", direction: "asc" },
-    stationCount: { key: "station_count", direction: "desc" },
-    lineCount: { key: "line_count", direction: "desc" },
-    accessTime: { key: "average_access_time_min", direction: "asc" },
+    stationRate: { key: "station_rate_per_100000", direction: "desc" },
     totalCrime: { key: "crime_rate_per_1000", direction: "asc" },
     seriousCrime: { key: "serious_crime_rate_per_10000", direction: "asc" },
-    supermarket: { key: "supermarket_count", direction: "desc" },
-    medical: { key: "medical_facility_count", direction: "desc" },
-    dailyFacility: { key: "daily_facility_count", direction: "desc" },
-    floodRisk: { key: "flood_risk_area_rate", direction: "asc" },
-    earthquakeRisk: { key: "earthquake_hazard_rank", direction: "asc" },
-    shelter: { key: "shelter_count", direction: "desc" },
+    supermarketRate: { key: "supermarket_rate_per_100000", direction: "desc" },
+    medicalRate: { key: "medical_rate_per_100000", direction: "desc" },
+    dailyFacilityRate: { key: "daily_facility_rate_per_100000", direction: "desc" },
+    shelterRate: { key: "shelter_rate_per_100000", direction: "desc" },
   };
 
   return Object.fromEntries(
@@ -339,76 +302,49 @@ function buildRanks(rows) {
 function getStrengths(row, ranks) {
   const detailCandidates = [
     {
-      label: "家賃が抑えめ",
-      softLabel: "家賃は比較的抑えめ",
-      rank: ranks.lowRent[row.code],
+      label: "人口あたりの駅数が多い",
+      softLabel: "駅アクセスは比較的良い",
+      rank: ranks.stationRate[row.code],
     },
     {
-      label: "駅が多い",
-      softLabel: "駅数は比較的多め",
-      rank: ranks.stationCount[row.code],
-    },
-    {
-      label: "路線が多い",
-      softLabel: "路線数は比較的多め",
-      rank: ranks.lineCount[row.code],
-    },
-    {
-      label: "主要駅に近い",
-      softLabel: "主要駅へ比較的出やすい",
-      rank: ranks.accessTime[row.code],
-    },
-    {
-      label: "犯罪率が低い",
-      softLabel: "犯罪率は比較的低め",
+      label: "人口あたりの犯罪件数が少ない",
+      softLabel: "犯罪件数は比較的少ない",
       rank: ranks.totalCrime[row.code],
     },
     {
-      label: "重大犯罪率が低い",
-      softLabel: "重大犯罪率は比較的低め",
+      label: "人口あたりの重大犯罪件数が少ない",
+      softLabel: "重大犯罪件数は比較的少ない",
       rank: ranks.seriousCrime[row.code],
     },
     {
-      label: "スーパーが多い",
-      softLabel: "スーパーは比較的多め",
-      rank: ranks.supermarket[row.code],
+      label: "人口あたりのスーパーが多い",
+      softLabel: "スーパーは比較的多い",
+      rank: ranks.supermarketRate[row.code],
     },
     {
-      label: "医療施設が多い",
-      softLabel: "医療施設は比較的多め",
-      rank: ranks.medical[row.code],
+      label: "人口あたりの医療施設が多い",
+      softLabel: "医療施設は比較的多い",
+      rank: ranks.medicalRate[row.code],
     },
     {
-      label: "日常施設が多い",
-      softLabel: "日常施設は比較的多め",
-      rank: ranks.dailyFacility[row.code],
+      label: "人口あたりの日常施設が多い",
+      softLabel: "日常施設は比較的多い",
+      rank: ranks.dailyFacilityRate[row.code],
     },
     {
-      label: "浸水リスク低め",
-      softLabel: "浸水リスクは比較的低め",
-      rank: ranks.floodRisk[row.code],
-    },
-    {
-      label: "地震リスク低め",
-      softLabel: "地震リスクは比較的低め",
-      rank: ranks.earthquakeRisk[row.code],
-    },
-    {
-      label: "避難所が多い",
-      softLabel: "避難所は比較的多め",
-      rank: ranks.shelter[row.code],
+      label: "人口あたりの避難所が多い",
+      softLabel: "避難所は比較的多い",
+      rank: ranks.shelterRate[row.code],
     },
   ];
 
   const detailedStrengths = detailCandidates
     .filter((strength) => strength.rank <= 5)
     .map((strength) => strength.label);
-
   const relativeStrengths = detailCandidates
     .filter((strength) => strength.rank > 5 && strength.rank <= 12)
     .sort((a, b) => a.rank - b.rank)
     .map((strength) => strength.softLabel);
-
   const scoreStrengths = [...SCORE_METRICS]
     .sort((a, b) => row[b.key] - row[a.key])
     .filter((metric) => row[metric.key] >= 75)
@@ -423,18 +359,14 @@ function getStrengths(row, ranks) {
 
 function getCautions(row, ranks) {
   const detailedCautions = [
-    { label: "家賃高め", active: ranks.lowRent[row.code] >= 19 },
-    { label: "駅数は少なめ", active: ranks.stationCount[row.code] >= 19 },
-    { label: "主要駅まで遠め", active: ranks.accessTime[row.code] >= 19 },
-    { label: "犯罪率は要確認", active: ranks.totalCrime[row.code] >= 19 },
-    { label: "スーパー少なめ", active: ranks.supermarket[row.code] >= 19 },
-    { label: "医療施設少なめ", active: ranks.medical[row.code] >= 19 },
-    { label: "浸水リスク高め", active: ranks.floodRisk[row.code] >= 19 },
-    { label: "避難所少なめ", active: ranks.shelter[row.code] >= 19 },
+    { label: "人口あたりの駅数は控えめ", active: ranks.stationRate[row.code] >= 19 },
+    { label: "人口あたりの犯罪件数は要確認", active: ranks.totalCrime[row.code] >= 19 },
+    { label: "人口あたりのスーパーは控えめ", active: ranks.supermarketRate[row.code] >= 19 },
+    { label: "人口あたりの医療施設は控えめ", active: ranks.medicalRate[row.code] >= 19 },
+    { label: "人口あたりの避難所は控えめ", active: ranks.shelterRate[row.code] >= 19 },
   ]
     .filter((caution) => caution.active)
     .map((caution) => caution.label);
-
   const scoreCautions = [...SCORE_METRICS]
     .sort((a, b) => row[a.key] - row[b.key])
     .filter((metric) => row[metric.key] < 45)
@@ -448,31 +380,23 @@ function uniqueList(items) {
 }
 
 function getFilteredRows() {
-  const rentLimit = toNumber(elements.rentLimit.value);
   const sortMode = elements.sortMode.value;
 
-  const rows = state.rows
-    .filter((row) => row.average_rent <= rentLimit)
-    .sort((a, b) => {
-      if (sortMode === "rent") {
-        return a.average_rent - b.average_rent;
-      }
-      if (sortMode === "safety") {
-        return b.score_safety - a.score_safety;
-      }
-      if (sortMode === "accessibility") {
-        return b.score_accessibility - a.score_accessibility;
-      }
-      if (sortMode === "convenience") {
-        return b.score_convenience - a.score_convenience;
-      }
-      if (sortMode === "resilience") {
-        return b.score_resilience - a.score_resilience;
-      }
-      return b.personalizedScore - a.personalizedScore;
-    });
-
-  return rows;
+  return [...state.rows].sort((a, b) => {
+    if (sortMode === "safety") {
+      return b.score_safety - a.score_safety;
+    }
+    if (sortMode === "accessibility") {
+      return b.score_accessibility - a.score_accessibility;
+    }
+    if (sortMode === "convenience") {
+      return b.score_convenience - a.score_convenience;
+    }
+    if (sortMode === "resilience") {
+      return b.score_resilience - a.score_resilience;
+    }
+    return b.personalizedScore - a.personalizedScore;
+  });
 }
 
 function renderPriorityBuilder() {
@@ -495,7 +419,7 @@ function renderPriorityBuilder() {
     <div class="priority-list-wrap">
       <div class="priority-list-heading">
         <span>優先順位</span>
-        <small>選んだ観点だけを並べます。未選択時は全観点を均等に見ます。</small>
+        <small>選んだ観点だけを上から順に重く見ます。未選択時は全観点を均等に見ます。</small>
       </div>
       <div class="priority-list" id="priority-list"></div>
     </div>
@@ -540,7 +464,7 @@ function setActivePreset(presetName) {
 }
 
 function applyPreset(presetName) {
-  state.priority = [...PRESETS[presetName]];
+  state.priority = [...(PRESETS[presetName] ?? PRESETS.balanced)];
   state.isRankingExpanded = false;
   setActivePreset(presetName);
   renderPriorityBuilder();
@@ -559,7 +483,7 @@ function renderRanking() {
 
   if (rows.length === 0) {
     elements.rankingList.innerHTML =
-      '<div class="empty-state">条件に合う区がありません。家賃上限か重視軸を調整してください。</div>';
+      '<div class="empty-state">表示できる実取得データがありません。</div>';
     return;
   }
 
@@ -583,7 +507,7 @@ function renderRanking() {
         ${renderTags(row.cautions, "tag warning")}
       </div>
       <div class="mini-metrics">
-        <div><span>平均家賃</span><strong>${formatRent(row.average_rent)}</strong></div>
+        <div><span>人口</span><strong>${formatNumber(row.population)}人</strong></div>
         <div><span>治安</span><strong>${row.score_safety.toFixed(1)}</strong></div>
         <div><span>アクセス</span><strong>${row.score_accessibility.toFixed(1)}</strong></div>
       </div>
@@ -608,69 +532,77 @@ function renderRanking() {
     );
     toggleButton.textContent = state.isRankingExpanded
       ? "表示を減らす"
-      : `すべて表示（${rows.length}区）`;
+      : `さらに${rows.length - MOBILE_RANKING_LIMIT}区を見る`;
     elements.rankingList.append(toggleButton);
   }
 }
 
-function renderTags(tags, className, emptyLabel = "") {
-  if (tags.length === 0) {
-    if (!emptyLabel) {
-      return "";
-    }
-    return `<span class="tag">${emptyLabel}</span>`;
+function renderTags(items, className, emptyLabel = "") {
+  if (items.length === 0) {
+    return emptyLabel ? `<span class="${className}">${emptyLabel}</span>` : "";
   }
-  return tags.map((tag) => `<span class="${className}">${tag}</span>`).join("");
+  return items.map((item) => `<span class="${className}">${item}</span>`).join("");
 }
 
 function renderMap() {
-  if (!state.geojson) {
+  if (!state.geojson || state.rows.length === 0) {
     return;
   }
 
   const metric = elements.mapMetric.value;
+  const rowsByCode = Object.fromEntries(state.rows.map((row) => [row.code, row]));
   const features = state.geojson.features;
   const bounds = getGeoBounds(features);
-  const width = 760;
-  const height = 560;
-  const padding = 24;
+  const width = 520;
+  const height = 520;
+  const padding = 18;
   const scale = Math.min(
     (width - padding * 2) / (bounds.maxX - bounds.minX),
     (height - padding * 2) / (bounds.maxY - bounds.minY),
   );
-  const rowByCode = Object.fromEntries(state.rows.map((row) => [row.code, row]));
 
   elements.wardMap.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  elements.wardMap.innerHTML = "";
+  elements.wardMap.innerHTML = features
+    .map((feature) => {
+      const code = feature.properties.code;
+      const row = rowsByCode[code];
+      if (!row) {
+        return "";
+      }
+      const path = geometryToPath(feature.geometry, bounds, scale, height, padding);
+      const isSelected = state.selectedCode === code;
+      return `
+        <path
+          d="${path}"
+          fill="${colorScale(row[metric])}"
+          class="ward-shape ${isSelected ? "selected" : ""}"
+          data-code="${code}"
+          tabindex="0"
+          role="button"
+          aria-label="${row.ward_name} ${row[metric].toFixed(1)}"
+        ></path>
+      `;
+    })
+    .join("");
 
-  features.forEach((feature) => {
-    const code = String(feature.properties.code);
-    const row = rowByCode[code];
-    if (!row) {
-      return;
-    }
-
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", geometryToPath(feature.geometry, bounds, scale, height, padding));
-    path.setAttribute("fill", colorScale(row[metric]));
-    path.classList.add("ward-shape");
-    path.classList.toggle("is-selected", row.code === state.selectedCode);
-    path.dataset.code = row.code;
-    path.setAttribute("tabindex", "0");
-    path.setAttribute("aria-label", `${row.ward_name} ${row[metric].toFixed(1)}点`);
-
-    path.addEventListener("mouseenter", (event) => showTooltip(event, row, metric));
-    path.addEventListener("mousemove", (event) => positionTooltip(event));
-    path.addEventListener("mouseleave", hideTooltip);
-    path.addEventListener("click", () => openDrawer(row.code));
-    path.addEventListener("keydown", (event) => {
+  elements.wardMap.querySelectorAll(".ward-shape").forEach((shape) => {
+    shape.addEventListener("mouseenter", (event) => {
+      const row = rowsByCode[event.currentTarget.dataset.code];
+      showTooltip(event, row, metric);
+    });
+    shape.addEventListener("mousemove", (event) => {
+      positionTooltip(event);
+    });
+    shape.addEventListener("mouseleave", hideTooltip);
+    shape.addEventListener("click", (event) => {
+      openDrawer(event.currentTarget.dataset.code);
+    });
+    shape.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openDrawer(row.code);
+        openDrawer(event.currentTarget.dataset.code);
       }
     });
-
-    elements.wardMap.append(path);
   });
 }
 
@@ -727,7 +659,7 @@ function showTooltip(event, row, metric) {
   elements.mapTooltip.innerHTML = `
     <strong>${row.ward_name}</strong><br>
     ${metricLabel}: ${row[metric].toFixed(1)}<br>
-    平均家賃: ${formatRent(row.average_rent)}<br>
+    人口: ${formatNumber(row.population)}人<br>
     強み: ${(row.strengths[0] ?? "バランス型")}
   `;
   positionTooltip(event);
@@ -750,15 +682,16 @@ function renderCompare() {
 
   if (rows.length === 0) {
     elements.compareContent.className = "compare-empty";
-    elements.compareContent.textContent = "比較したい区をランキングから追加してください。";
+    elements.compareContent.textContent =
+      "比較したい区をランキングから追加してください。";
     return;
   }
 
   elements.compareContent.className = "compare-table-wrap";
   const metrics = [
-    ["おすすめ度", "personalizedScore", "higher"],
-    ["平均家賃", "average_rent", "lower", formatRent],
-    ...SCORE_METRICS.map((metric) => [metric.label, metric.key, "higher"]),
+    ["おすすめ度", "personalizedScore"],
+    ["人口", "population", formatNumber],
+    ...SCORE_METRICS.map((metric) => [metric.label, metric.key]),
   ];
 
   elements.compareContent.innerHTML = `
@@ -771,11 +704,8 @@ function renderCompare() {
       </thead>
       <tbody>
         ${metrics
-          .map(([label, key, direction, formatter]) => {
-            const bestValue =
-              direction === "lower"
-                ? Math.min(...rows.map((row) => row[key]))
-                : Math.max(...rows.map((row) => row[key]));
+          .map(([label, key, formatter]) => {
+            const bestValue = Math.max(...rows.map((row) => row[key]));
             return `
               <tr>
                 <th>${label}</th>
@@ -891,8 +821,8 @@ function renderDrawer(row) {
         <p>${row.recommended_profile}</p>
         <div class="drawer-score-row">
           <span class="score-pill">${row.personalizedScore.toFixed(1)}<span>おすすめ度</span></span>
-          <span class="score-pill">${formatRent(row.average_rent)}<span>平均家賃</span></span>
           <span class="score-pill">${formatNumber(row.population)}人<span>人口</span></span>
+          <span class="score-pill">${formatDecimal(row.crime_rate_per_1000, 2)}件<span>犯罪/千人</span></span>
         </div>
         <div class="tag-row">
           ${renderTags(row.strengths, "tag", "バランス型")}
@@ -957,52 +887,16 @@ function renderRadar(row) {
 function renderDrilldown(row) {
   const details = [
     {
-      metric: "score_affordability",
-      evidence: [
-        {
-          label: "平均家賃",
-          value: formatRent(row.average_rent),
-          scoreLabel: "家賃の安さ",
-          weight: 0.5,
-        },
-        {
-          label: "単身世帯比率",
-          value: formatPercent(row.single_household_rate),
-          scoreLabel: "単身向き住宅環境",
-          weight: 0.3,
-        },
-        {
-          label: "家賃負担指数",
-          value: formatDecimal(row.rent_burden_index, 3),
-          scoreLabel: "家賃負担の軽さ",
-          weight: 0.2,
-        },
-      ],
-      note: "家賃スコアは、平均家賃や家賃負担の軽さを中心に見ています。",
-    },
-    {
       metric: "score_accessibility",
       evidence: [
         {
-          label: "駅密度",
-          value: `${formatDecimal(row.station_density, 2)}駅/km²`,
-          scoreLabel: "駅密度スコア",
-          weight: 0.4,
-        },
-        {
-          label: "路線数",
-          value: `${row.line_count}路線`,
-          scoreLabel: "路線数スコア",
-          weight: 0.2,
-        },
-        {
-          label: "主要駅への平均アクセス",
-          value: `${formatDecimal(row.average_access_time_min, 1)}分`,
-          scoreLabel: "アクセス時間の短さ",
-          weight: 0.4,
+          label: "駅数",
+          value: `${formatNumber(row.station_count)}駅`,
+          scoreLabel: "人口10万人あたり駅数",
+          weight: 1,
         },
       ],
-      note: "駅の密度、路線数、主要駅への移動時間から交通アクセスを見ています。",
+      note: "OpenStreetMap / Overpass APIで取得した駅数を、人口あたりに変換して評価しています。",
     },
     {
       metric: "score_safety",
@@ -1010,95 +904,59 @@ function renderDrilldown(row) {
         {
           label: "人口1,000人あたり犯罪件数",
           value: `${formatDecimal(row.crime_rate_per_1000, 2)}件`,
-          scoreLabel: "犯罪件数の少なさ",
+          scoreLabel: "総犯罪件数の少なさ",
           weight: 0.7,
         },
         {
           label: "人口10,000人あたり重大犯罪件数",
           value: `${formatDecimal(row.serious_crime_rate_per_10000, 2)}件`,
-          scoreLabel: "重大犯罪の少なさ",
+          scoreLabel: "重大犯罪件数の少なさ",
           weight: 0.3,
         },
       ],
-      note: "人口あたりの犯罪件数と重大犯罪の少なさを中心に治安を見ています。",
+      note: "警視庁CSVから取得した犯罪件数を、e-Stat人口で人口あたりに変換しています。",
     },
     {
       metric: "score_convenience",
       evidence: [
         {
-          label: "コンビニ密度",
-          value: `${formatDecimal(row.convenience_density, 2)}件/km²`,
-          scoreLabel: "コンビニ密度スコア",
+          label: "コンビニ",
+          value: `${formatNumber(row.convenience_count)}件`,
+          scoreLabel: "人口10万人あたりコンビニ",
           weight: 0.25,
         },
         {
-          label: "スーパー密度",
-          value: `${formatDecimal(row.supermarket_density, 2)}件/km²`,
-          scoreLabel: "スーパー密度スコア",
+          label: "スーパー",
+          value: `${formatNumber(row.supermarket_count)}件`,
+          scoreLabel: "人口10万人あたりスーパー",
           weight: 0.25,
         },
         {
-          label: "医療施設密度",
-          value: `${formatDecimal(row.medical_density, 2)}件/km²`,
-          scoreLabel: "医療施設密度スコア",
+          label: "医療施設",
+          value: `${formatNumber(row.medical_facility_count)}件`,
+          scoreLabel: "人口10万人あたり医療施設",
           weight: 0.3,
         },
         {
-          label: "日常施設密度",
-          value: `${formatDecimal(row.daily_facility_density, 2)}件/km²`,
-          scoreLabel: "日常施設密度スコア",
+          label: "日常施設",
+          value: `${formatNumber(row.daily_facility_count)}件`,
+          scoreLabel: "人口10万人あたり日常施設",
           weight: 0.2,
         },
       ],
-      note: "日々の買い物や医療アクセスに関わる施設数を見ています。",
-    },
-    {
-      metric: "score_livability",
-      evidence: [
-        {
-          label: "単身世帯比率",
-          value: formatPercent(row.single_household_rate),
-          scoreLabel: "単身世帯比率スコア",
-          weight: 0.3,
-        },
-        {
-          label: "平均住宅面積",
-          value: `${formatDecimal(row.average_floor_space, 1)}m²`,
-          scoreLabel: "住宅面積スコア",
-          weight: 0.25,
-        },
-        {
-          label: "快適性補正",
-          value: "単身世帯比率と住宅面積の平均",
-          scoreLabel: "快適性補正スコア",
-          weight: 0.45,
-        },
-      ],
-      note: "この指標は総合点ではなく、一人暮らしや住居面の快適性に近い評価です。",
+      note: "OpenStreetMap / Overpass APIで取得した施設数を、人口あたりに変換して評価しています。",
     },
     {
       metric: "score_resilience",
       evidence: [
         {
-          label: "浸水リスク面積率",
-          value: formatPercent(row.flood_risk_area_rate),
-          scoreLabel: "浸水リスクの低さ",
-          weight: 0.4,
-        },
-        {
-          label: "地震ハザードランク",
-          value: formatDecimal(row.earthquake_hazard_rank, 1),
-          scoreLabel: "地震リスクの低さ",
-          weight: 0.3,
-        },
-        {
-          label: "人口10,000人あたり避難所数",
-          value: `${formatDecimal(row.shelter_rate_per_10000, 2)}か所`,
-          scoreLabel: "避難所の多さ",
-          weight: 0.3,
+          label: "避難所数",
+          value: `${formatNumber(row.shelter_count)}か所`,
+          scoreLabel: "人口10万人あたり避難所",
+          weight: 1,
         },
       ],
-      note: "浸水リスク、地震ハザード、避難所数を使って防災面を見ています。",
+      note: "OpenStreetMap / Overpass APIで取得した避難所数のみを使っています。固定の災害リスク値は使っていません。",
     },
   ];
 
@@ -1137,14 +995,14 @@ function renderDrilldown(row) {
 function renderScoreFormula(row, detail) {
   const metric = metricByKey(detail.metric);
   const formula = detail.evidence
-    .map((item) => `${formatDecimal(item.weight, 2)} × ${item.scoreLabel}(0-100点)`)
+    .map((item) => `${formatDecimal(item.weight, 2)} x ${item.scoreLabel}(0-100点)`)
     .join(" + ");
 
   return `
     <div class="score-formula">
       <span>計算方法</span>
       <strong>現在のスコア: ${row[metric.key].toFixed(1)}点</strong>
-      <p>各根拠データを23区内で0-100点に正規化してから、重み付けして合成します。</p>
+      <p>各根拠データを23区内で0-100点に正規化してから、重み付けして合成しています。</p>
       <p>スコア = ${formula}</p>
     </div>
   `;
@@ -1183,7 +1041,7 @@ function bindEvents() {
   elements.advancedSettingsToggle.addEventListener("click", toggleAdvancedSettings);
   elements.priorityBuilder.addEventListener("click", syncPriorityFromInteraction);
 
-  [elements.rentLimit, elements.sortMode, elements.mapMetric].forEach((element) => {
+  [elements.sortMode, elements.mapMetric].forEach((element) => {
     element.addEventListener("change", () => {
       if (element !== elements.mapMetric) {
         state.isRankingExpanded = false;
@@ -1235,7 +1093,7 @@ async function init() {
   } catch (error) {
     document.querySelector("main").innerHTML = `
       <div class="load-error">
-        データの読み込みに失敗しました。ページを再読み込みするか、HTTPサーバー経由で表示してください。
+        データの読み込みに失敗しました。実取得データが生成されているか確認してください。
       </div>
     `;
     console.error(error);

@@ -3,12 +3,11 @@ import logging
 import sys
 from pathlib import Path
 
-# プロジェクトのルートディレクトリを sys.path に追加
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.config import DATA_PROCESSED_DIR
-from src.estat_collector import fetch_estat_data
 from src.crime_collector import fetch_crime_data
+from src.estat_collector import fetch_estat_data
 from src.osm_collector import fetch_osm_data
 from src.spatial_collector import fetch_spatial_data
 
@@ -18,12 +17,11 @@ logging.basicConfig(
 
 
 def min_max_normalize(series, invert=False):
-    """シリーズの値を0〜1に正規化する。invert=Trueで悪い指標を良いスコアに反転する。"""
     min_val = series.min()
     max_val = series.max()
 
     if max_val == min_val:
-        return series.apply(lambda x: 0.5)
+        return series.apply(lambda _value: 0.5)
 
     normalized = (series - min_val) / (max_val - min_val)
     if invert:
@@ -31,47 +29,39 @@ def min_max_normalize(series, invert=False):
     return normalized
 
 
+def per_capita_rate(count_series, population_series, scale):
+    return (count_series / population_series) * scale
+
+
+def require_columns(df, columns, label):
+    missing = sorted(set(columns) - set(df.columns))
+    if missing:
+        raise ValueError(f"{label} is missing columns: {', '.join(missing)}")
+
+
+def validate_complete_wards(df, label):
+    if df["code"].nunique() != 23 or len(df) != 23:
+        raise ValueError(f"{label} must contain exactly 23 unique ward rows.")
+
+
 def add_ward_characteristics(df):
-    """各区のスコア特徴から、一人暮らし向きの推薦文/特徴テキストを追加する"""
     characteristics = []
     for _, row in df.iterrows():
-        afford = row["score_affordability"]
-        access = row["score_accessibility"]
-        safety = row["score_safety"]
-        conv = row["score_convenience"]
-
-        # スコアに基づいた推薦ロジック
         traits = []
-        if afford >= 0.8:
-            traits.append("家賃が非常に安く、初期費用を抑えたいコスパ重視派に最適。")
-        elif afford <= 0.2:
-            traits.append(
-                "家賃相場は非常に高いが、それに見合うステータスと高い利便性がある。"
-            )
 
-        if access >= 0.8:
+        if row["score_accessibility"] >= 80:
+            traits.append("駅数が多く、鉄道アクセスを重視する人に向いています。")
+        if row["score_safety"] >= 80:
+            traits.append("人口あたりの犯罪件数が比較的少ないエリアです。")
+        if row["score_convenience"] >= 80:
             traits.append(
-                "主要駅へのアクセスが抜群で、通勤・通学やアクティブな移動が多い人向き。"
+                "生活施設が多く、日常の買い物や医療アクセスを確保しやすいです。"
             )
+        if row["score_resilience"] >= 80:
+            traits.append("人口あたりの避難所数が比較的多いエリアです。")
 
-        if safety >= 0.8:
-            traits.append(
-                "治安が極めて良く静かで、初めての一人暮らしや女性にも非常に安心。"
-            )
-        elif safety <= 0.3:
-            traits.append(
-                "人通りが多く賑やかだが、防犯意識や住むエリアの選定は念入りに。"
-            )
-
-        if conv >= 0.8:
-            traits.append(
-                "コンビニ・スーパーや医療機関が密集しており、日々の生活で不便を感じない。"
-            )
-
-        if len(traits) == 0:
-            traits.append(
-                "家賃・治安・利便性のバランスが取れており、誰にでも住みやすいエリア。"
-            )
+        if not traits:
+            traits.append("実取得データで見ると、各指標のバランス型エリアです。")
 
         characteristics.append(" ".join(traits))
 
@@ -80,242 +70,158 @@ def add_ward_characteristics(df):
 
 
 def run_pipeline():
-    logging.info("=========================================")
-    logging.info("🚀 東京23区住みやすさインデックス データパイプライン起動")
-    logging.info("=========================================")
-
-    # 1. 各データソースからデータを収集
-    logging.info("Step 1: 各オープンデータソースから収集を開始します...")
+    logging.info("Starting Tokyo livability data pipeline.")
 
     estat_df = fetch_estat_data()
     crime_df = fetch_crime_data()
     osm_df = fetch_osm_data()
     spatial_df = fetch_spatial_data()
 
-    # 2. データのマージ
-    logging.info("Step 2: 収集したデータを区コード（JISコード）でマージします...")
+    require_columns(estat_df, ["code", "ward_name", "population"], "e-Stat data")
+    require_columns(
+        crime_df,
+        [
+            "code",
+            "total_crime_cases",
+            "serious_crime_cases",
+            "violent_crime_cases",
+            "theft_crime_cases",
+            "other_crime_cases",
+        ],
+        "crime data",
+    )
+    require_columns(
+        osm_df,
+        [
+            "code",
+            "convenience_count",
+            "supermarket_count",
+            "medical_facility_count",
+            "daily_facility_count",
+        ],
+        "OSM POI data",
+    )
+    require_columns(
+        spatial_df,
+        ["code", "station_count", "shelter_count"],
+        "OSM spatial data",
+    )
 
-    # codeを文字列型に統一
-    estat_df["code"] = estat_df["code"].astype(str)
-    crime_df["code"] = crime_df["code"].astype(str)
-    osm_df["code"] = osm_df["code"].astype(str)
-    spatial_df["code"] = spatial_df["code"].astype(str)
+    for label, df in (
+        ("e-Stat data", estat_df),
+        ("crime data", crime_df),
+        ("OSM POI data", osm_df),
+        ("OSM spatial data", spatial_df),
+    ):
+        df["code"] = df["code"].astype(str)
+        validate_complete_wards(df, label)
 
     master_df = estat_df.merge(
-        crime_df.drop(columns=["ward_name"]), on="code", how="outer"
+        crime_df.drop(columns=["ward_name"], errors="ignore"), on="code", how="inner"
     )
     master_df = master_df.merge(
-        osm_df.drop(columns=["ward_name"]), on="code", how="outer"
+        osm_df.drop(columns=["ward_name"], errors="ignore"), on="code", how="inner"
     )
     master_df = master_df.merge(
-        spatial_df.drop(columns=["ward_name"]), on="code", how="outer"
+        spatial_df.drop(columns=["ward_name"], errors="ignore"), on="code", how="inner"
+    )
+    validate_complete_wards(master_df, "merged data")
+
+    master_df["crime_rate_per_1000"] = per_capita_rate(
+        master_df["total_crime_cases"], master_df["population"], 1000
+    )
+    master_df["serious_crime_rate_per_10000"] = per_capita_rate(
+        master_df["serious_crime_cases"], master_df["population"], 10000
+    )
+    master_df["station_rate_per_100000"] = per_capita_rate(
+        master_df["station_count"], master_df["population"], 100000
+    )
+    master_df["shelter_rate_per_100000"] = per_capita_rate(
+        master_df["shelter_count"], master_df["population"], 100000
+    )
+    master_df["convenience_rate_per_100000"] = per_capita_rate(
+        master_df["convenience_count"], master_df["population"], 100000
+    )
+    master_df["supermarket_rate_per_100000"] = per_capita_rate(
+        master_df["supermarket_count"], master_df["population"], 100000
+    )
+    master_df["medical_rate_per_100000"] = per_capita_rate(
+        master_df["medical_facility_count"], master_df["population"], 100000
+    )
+    master_df["daily_facility_rate_per_100000"] = per_capita_rate(
+        master_df["daily_facility_count"], master_df["population"], 100000
     )
 
-    # 3. 生指標から比較用の密度/比率指標を加工算出
-    logging.info("Step 3: 比較用の中間指標（密度、発生率など）を加工算出します...")
-
-    # 面積あたりの駅密度・施設密度
-    master_df["station_density"] = (
-        master_df["station_count"] / master_df["ward_area_km2"]
-    )
-    master_df["convenience_density"] = (
-        master_df["convenience_count"] / master_df["ward_area_km2"]
-    )
-    master_df["supermarket_density"] = (
-        master_df["supermarket_count"] / master_df["ward_area_km2"]
-    )
-    master_df["medical_density"] = (
-        master_df["medical_facility_count"] / master_df["ward_area_km2"]
-    )
-    master_df["daily_facility_density"] = (
-        master_df["daily_facility_count"] / master_df["ward_area_km2"]
-    )
-
-    # 人口あたりの犯罪率 (人口1,000人あたり)
-    master_df["crime_rate_per_1000"] = (
-        master_df["total_crime_cases"] / master_df["population"]
-    ) * 1000
-    master_df["serious_crime_rate_per_10000"] = (
-        master_df["serious_crime_cases"] / master_df["population"]
-    ) * 10000
-
-    # 人口あたりの避難所数 (人口10,000人あたり)
-    master_df["shelter_rate_per_10000"] = (
-        master_df["shelter_count"] / master_df["population"]
-    ) * 10000
-
-    # 家賃負担感指標 (家賃 / 所得 proxy)
-    # ※所得単位は万円、家賃は円なので調整
-    master_df["rent_burden_index"] = master_df["average_rent"] / (
-        master_df["income_proxy"] * 10000
-    )
-
-    # 4. 指標の正規化 (0.0 〜 1.0)
-    logging.info("Step 4: 各種指標を0〜1の範囲に正規化します...")
-
-    # 4.1 住居コスト関連
-    master_df["norm_rent"] = min_max_normalize(
-        master_df["average_rent"], invert=True
-    )  # 低いほど高得点
-    master_df["norm_single_house_rate"] = min_max_normalize(
-        master_df["single_household_rate"], invert=False
-    )
-    master_df["norm_rent_burden"] = min_max_normalize(
-        master_df["rent_burden_index"], invert=True
-    )  # 低いほど高得点
-
-    # 4.2 交通利便性関連
-    master_df["norm_station_density"] = min_max_normalize(
-        master_df["station_density"], invert=False
-    )
-    master_df["norm_line_count"] = min_max_normalize(
-        master_df["line_count"], invert=False
-    )
-    master_df["norm_access_time"] = min_max_normalize(
-        master_df["average_access_time_min"], invert=True
-    )  # 短いほど高得点
-
-    # 4.3 治安関連
+    master_df["norm_station"] = min_max_normalize(master_df["station_rate_per_100000"])
     master_df["norm_total_crime"] = min_max_normalize(
         master_df["crime_rate_per_1000"], invert=True
-    )  # 低いほど高得点
+    )
     master_df["norm_serious_crime"] = min_max_normalize(
         master_df["serious_crime_rate_per_10000"], invert=True
     )
-
-    # 4.4 生活利便性関連
     master_df["norm_convenience"] = min_max_normalize(
-        master_df["convenience_density"], invert=False
+        master_df["convenience_rate_per_100000"]
     )
     master_df["norm_supermarket"] = min_max_normalize(
-        master_df["supermarket_density"], invert=False
+        master_df["supermarket_rate_per_100000"]
     )
-    master_df["norm_medical"] = min_max_normalize(
-        master_df["medical_density"], invert=False
-    )
+    master_df["norm_medical"] = min_max_normalize(master_df["medical_rate_per_100000"])
     master_df["norm_daily_access"] = min_max_normalize(
-        master_df["daily_facility_density"], invert=False
+        master_df["daily_facility_rate_per_100000"]
     )
+    master_df["norm_shelter"] = min_max_normalize(master_df["shelter_rate_per_100000"])
 
-    # 4.5 居住環境関連
-    master_df["norm_single_household"] = min_max_normalize(
-        master_df["single_household_rate"], invert=False
-    )
-    master_df["norm_floor_space"] = min_max_normalize(
-        master_df["average_floor_space"], invert=False
-    )
-    # 築年や公園面積は、今回は簡易的に単身世帯比率と部屋面積の平均で代替補正
-    master_df["norm_livability_comfort"] = (
-        master_df["norm_single_household"] + master_df["norm_floor_space"]
-    ) / 2
-
-    # 4.6 リスク関連
-    master_df["norm_flood_risk"] = min_max_normalize(
-        master_df["flood_risk_area_rate"], invert=True
-    )  # 低いほど高得点
-    master_df["norm_earthquake_risk"] = min_max_normalize(
-        master_df["earthquake_hazard_rank"], invert=True
-    )
-    master_df["norm_shelter"] = min_max_normalize(
-        master_df["shelter_rate_per_10000"], invert=False
-    )
-
-    # 5. カテゴリスコアの計算 (設計書に基づく重み付き平均)
-    logging.info(
-        "Step 5: 設計書で定義された重みに基づいてカテゴリ別スコアを計算します..."
-    )
-
-    # 5.1 住居コスト
-    master_df["score_affordability"] = (
-        0.5 * master_df["norm_rent"]
-        + 0.3 * master_df["norm_single_house_rate"]
-        + 0.2 * master_df["norm_rent_burden"]
-    )
-
-    # 5.2 交通利便性
-    master_df["score_accessibility"] = (
-        0.4 * master_df["norm_station_density"]
-        + 0.2 * master_df["norm_line_count"]
-        + 0.4 * master_df["norm_access_time"]
-    )
-
-    # 5.3 治安
+    master_df["score_accessibility"] = master_df["norm_station"]
     master_df["score_safety"] = (
         0.7 * master_df["norm_total_crime"] + 0.3 * master_df["norm_serious_crime"]
     )
-
-    # 5.4 生活利便性
     master_df["score_convenience"] = (
         0.25 * master_df["norm_convenience"]
         + 0.25 * master_df["norm_supermarket"]
         + 0.30 * master_df["norm_medical"]
         + 0.20 * master_df["norm_daily_access"]
     )
+    master_df["score_resilience"] = master_df["norm_shelter"]
 
-    # 5.5 居住環境
-    master_df["score_livability"] = (
-        0.30 * master_df["norm_single_household"]
-        + 0.25 * master_df["norm_floor_space"]
-        + 0.45 * master_df["norm_livability_comfort"]
-    )
+    score_cols = [
+        "score_accessibility",
+        "score_safety",
+        "score_convenience",
+        "score_resilience",
+    ]
+    for col in score_cols:
+        master_df[col] = (master_df[col] * 100).round(1)
 
-    # 5.6 レジリエンス(リスク)
-    master_df["score_resilience"] = (
-        0.40 * master_df["norm_flood_risk"]
-        + 0.30 * master_df["norm_earthquake_risk"]
-        + 0.30 * master_df["norm_shelter"]
-    )
-
-    # 6. 特徴要約・おすすめプロファイルの追加
     master_df = add_ward_characteristics(master_df)
 
-    # 7. スコア出力用にカラムを厳選して整理
     final_cols = [
         "code",
         "ward_name",
         "population",
-        "average_rent",
-        "score_affordability",
         "score_accessibility",
         "score_safety",
         "score_convenience",
-        "score_livability",
         "score_resilience",
         "recommended_profile",
     ]
-
     output_df = master_df[final_cols].copy()
-
-    # 各スコアをわかりやすく100点満点表記（小数第1位）に変換
-    score_cols = [col for col in output_df.columns if col.startswith("score_")]
-    for col in score_cols:
-        output_df[col] = (output_df[col] * 100).round(1)
 
     output_path = DATA_PROCESSED_DIR / "tokyo_livability_index.csv"
     output_df.to_csv(output_path, index=False, encoding="utf-8-sig")
-
-    logging.info("=========================================")
-    logging.info("🎉 処理が完了しました！")
-    logging.info(f"保存先: {output_path}")
-    logging.info("=========================================")
-
-    # プレビュー表示
-    print("\n【出力データプレビュー (一部)】")
+    logging.info("Saved processed livability index: %s", output_path)
     print(output_df.head(5).to_string(index=False))
     return output_df
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="東京23区住みやすさインデックス集計パイプライン"
+        description="Fetch real source data and build Tokyo 23 ward livability scores."
     )
     parser.add_argument(
         "--real",
         action="store_true",
         default=False,
-        help="モックではなく実データ（e-Stat API, OSM等）を使用して実行する",
+        help="Kept for CLI compatibility; the pipeline always uses real source data.",
     )
-    args = parser.parse_args()
-
-    # The pipeline always fetches source data; demo generation is disabled.
+    parser.parse_args()
     run_pipeline()
