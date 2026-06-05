@@ -31,6 +31,42 @@ POI_FILTERS = {
     ],
 }
 
+OUTPUT_PATH = DATA_RAW_DIR / "osm_poi_data.csv"
+OUTPUT_COLUMNS = [
+    "code",
+    "ward_name",
+    "convenience_count",
+    "supermarket_count",
+    "medical_facility_count",
+    "daily_facility_count",
+]
+
+
+def validate_complete_snapshot(df, label):
+    missing_columns = [column for column in OUTPUT_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"{label} is missing columns: {', '.join(missing_columns)}")
+
+    df["code"] = df["code"].astype(str)
+    codes = set(df["code"])
+    missing_codes = sorted(set(TOKYO_23_WARDS) - codes)
+    extra_codes = sorted(codes - set(TOKYO_23_WARDS))
+    if missing_codes or extra_codes or len(df) != len(TOKYO_23_WARDS):
+        raise ValueError(
+            f"{label} must contain exactly Tokyo 23 wards. "
+            f"missing={missing_codes}, extra={extra_codes}, rows={len(df)}"
+        )
+
+    return df[OUTPUT_COLUMNS].sort_values("code").reset_index(drop=True)
+
+
+def load_existing_snapshot():
+    if not OUTPUT_PATH.exists():
+        raise FileNotFoundError(f"OSM POI snapshot not found: {OUTPUT_PATH}")
+
+    df = pd.read_csv(OUTPUT_PATH, dtype={"code": str})
+    return validate_complete_snapshot(df, "OSM POI snapshot")
+
 
 def build_filter_block(poi_type):
     return "\n      ".join(
@@ -102,28 +138,36 @@ def query_overpass_for_ward(ward_name, max_retries=5):
             time.sleep(backoff_seconds)
 
 
-def fetch_osm_data():
-    """Fetch POI counts from OpenStreetMap without local fallback values."""
+def fetch_osm_data(use_existing_on_failure=True):
+    """Fetch POI counts from OSM, reusing only a validated prior snapshot on outage."""
     rows = []
-    for code, name in TOKYO_23_WARDS.items():
-        counts = query_overpass_for_ward(name)
-        rows.append(
-            {
-                "code": code,
-                "ward_name": name,
-                "convenience_count": counts["convenience"],
-                "supermarket_count": counts["supermarket"],
-                "medical_facility_count": counts["clinic"],
-                "daily_facility_count": counts["convenience"]
-                + counts["supermarket"]
-                + counts["post_office"],
-            }
+    try:
+        for code, name in TOKYO_23_WARDS.items():
+            counts = query_overpass_for_ward(name)
+            rows.append(
+                {
+                    "code": code,
+                    "ward_name": name,
+                    "convenience_count": counts["convenience"],
+                    "supermarket_count": counts["supermarket"],
+                    "medical_facility_count": counts["clinic"],
+                    "daily_facility_count": counts["convenience"]
+                    + counts["supermarket"]
+                    + counts["post_office"],
+                }
+            )
+    except Exception:
+        if not use_existing_on_failure:
+            raise
+        logging.warning(
+            "OSM POI live refresh failed. Using validated existing snapshot: %s",
+            OUTPUT_PATH,
         )
+        return load_existing_snapshot()
 
-    df = pd.DataFrame(rows)
-    output_path = DATA_RAW_DIR / "osm_poi_data.csv"
-    df.to_csv(output_path, index=False, encoding="utf-8-sig")
-    logging.info("Saved OSM POI data: %s", output_path)
+    df = validate_complete_snapshot(pd.DataFrame(rows), "OSM POI live data")
+    df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
+    logging.info("Saved OSM POI data: %s", OUTPUT_PATH)
     return df
 
 

@@ -15,6 +15,34 @@ logging.basicConfig(
 )
 
 OVERPASS_HEADERS = {"User-Agent": "TokyoLivabilityIndexBot/1.0 (contact: fuben@github)"}
+OUTPUT_PATH = DATA_RAW_DIR / "spatial_data.csv"
+OUTPUT_COLUMNS = ["code", "ward_name", "station_count", "line_count", "shelter_count"]
+
+
+def validate_complete_snapshot(df, label):
+    missing_columns = [column for column in OUTPUT_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"{label} is missing columns: {', '.join(missing_columns)}")
+
+    df["code"] = df["code"].astype(str)
+    codes = set(df["code"])
+    missing_codes = sorted(set(TOKYO_23_WARDS) - codes)
+    extra_codes = sorted(codes - set(TOKYO_23_WARDS))
+    if missing_codes or extra_codes or len(df) != len(TOKYO_23_WARDS):
+        raise ValueError(
+            f"{label} must contain exactly Tokyo 23 wards. "
+            f"missing={missing_codes}, extra={extra_codes}, rows={len(df)}"
+        )
+
+    return df[OUTPUT_COLUMNS].sort_values("code").reset_index(drop=True)
+
+
+def load_existing_snapshot():
+    if not OUTPUT_PATH.exists():
+        raise FileNotFoundError(f"OSM spatial snapshot not found: {OUTPUT_PATH}")
+
+    df = pd.read_csv(OUTPUT_PATH, dtype={"code": str})
+    return validate_complete_snapshot(df, "OSM spatial snapshot")
 
 
 def fetch_overpass_counts_with_retry(query, expected_counts, max_retries=5):
@@ -70,28 +98,36 @@ def build_spatial_query(ward_name):
     """
 
 
-def fetch_spatial_data():
-    """Fetch station, railway route, and shelter counts from OpenStreetMap."""
+def fetch_spatial_data(use_existing_on_failure=True):
+    """Fetch OSM spatial counts, reusing only a validated prior snapshot on outage."""
     rows = []
 
-    for code, name in TOKYO_23_WARDS.items():
-        station_count, line_count, shelter_count = fetch_overpass_counts_with_retry(
-            build_spatial_query(name), expected_counts=3
+    try:
+        for code, name in TOKYO_23_WARDS.items():
+            station_count, line_count, shelter_count = fetch_overpass_counts_with_retry(
+                build_spatial_query(name), expected_counts=3
+            )
+            rows.append(
+                {
+                    "code": code,
+                    "ward_name": name,
+                    "station_count": station_count,
+                    "line_count": line_count,
+                    "shelter_count": shelter_count,
+                }
+            )
+    except Exception:
+        if not use_existing_on_failure:
+            raise
+        logging.warning(
+            "OSM spatial live refresh failed. Using validated existing snapshot: %s",
+            OUTPUT_PATH,
         )
-        rows.append(
-            {
-                "code": code,
-                "ward_name": name,
-                "station_count": station_count,
-                "line_count": line_count,
-                "shelter_count": shelter_count,
-            }
-        )
+        return load_existing_snapshot()
 
-    df = pd.DataFrame(rows)
-    output_path = DATA_RAW_DIR / "spatial_data.csv"
-    df.to_csv(output_path, index=False, encoding="utf-8-sig")
-    logging.info("Saved OSM spatial data: %s", output_path)
+    df = validate_complete_snapshot(pd.DataFrame(rows), "OSM spatial live data")
+    df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
+    logging.info("Saved OSM spatial data: %s", OUTPUT_PATH)
     return df
 
 
