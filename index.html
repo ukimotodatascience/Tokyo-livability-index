@@ -12,7 +12,7 @@
         <p class="eyebrow">Tokyo 23 Wards Decision Dashboard</p>
         <h1>東京23区 住み替え意思決定ダッシュボード</h1>
         <p class="lead">
-          家賃、治安、アクセス、生活利便性、防災などの重視度を変えながら、
+          治安、アクセス、生活利便性、避難所などの重視度を変えながら、
           自分に合う区を絞り込めます。
         </p>
       </div>
@@ -22,7 +22,7 @@
           <span class="stat-label">対象区</span>
         </div>
         <div>
-          <span class="stat-value">6</span>
+          <span class="stat-value">4</span>
           <span class="stat-label">評価軸</span>
         </div>
       </div>
@@ -44,9 +44,6 @@
           <button class="preset-button active" data-preset="balanced" type="button">
             指定なし
           </button>
-          <button class="preset-button" data-preset="budget" type="button">
-            コスパ
-          </button>
           <button class="preset-button" data-preset="safety" type="button">
             安心
           </button>
@@ -57,32 +54,19 @@
             生活利便性
           </button>
           <button class="preset-button" data-preset="resilience" type="button">
-            防災
+            避難所
           </button>
         </div>
 
         <div class="filters-grid">
-          <label class="filter-field" for="rent-limit">
-            <span>家賃上限</span>
-            <select id="rent-limit">
-              <option value="999999">上限なし（12万円以上も含める）</option>
-              <option value="80000">8万円以下</option>
-              <option value="90000">9万円以下</option>
-              <option value="100000">10万円以下</option>
-              <option value="110000">11万円以下</option>
-              <option value="120000">12万円以下</option>
-            </select>
-          </label>
-
           <label class="filter-field" for="sort-mode">
             <span>並び替え</span>
             <select id="sort-mode">
               <option value="personalized">おすすめ度</option>
-              <option value="rent">家賃が安い順</option>
               <option value="safety">治安が良い順</option>
               <option value="accessibility">アクセスが良い順</option>
               <option value="convenience">生活利便性が高い順</option>
-              <option value="resilience">防災スコアが高い順</option>
+              <option value="resilience">避難所スコアが高い順</option>
             </select>
           </label>
         </div>
@@ -118,12 +102,10 @@
               <span>色分け</span>
               <select id="map-metric">
                 <option value="personalizedScore">おすすめ度</option>
-                <option value="score_affordability">家賃</option>
                 <option value="score_accessibility">アクセス</option>
                 <option value="score_safety">治安</option>
                 <option value="score_convenience">生活利便性</option>
-                <option value="score_livability">居住快適性</option>
-                <option value="score_resilience">防災</option>
+                <option value="score_resilience">避難所</option>
               </select>
             </label>
           </div>
@@ -168,12 +150,12 @@
           <p class="eyebrow">Data Notice</p>
           <h2 id="data-attribution-title">データ利用について</h2>
           <p>
-            本サービスの表示データは、政府統計の総合窓口(e-Stat)などで公開されている統計・公開データを参照し、当サービスが加工・集計して作成しています。
+            本サービスの表示データは、e-Stat、警視庁公開CSV、OpenStreetMap / Overpass API、同梱GeoJSONから取得・算出できるデータだけを加工・集計して作成しています。
           </p>
           <p>
-            実データ生成時には政府統計総合窓口(e-Stat)のAPI機能を利用する場合がありますが、静的公開版には取得済みデータまたはフォールバック値が含まれることがあります。サービスの内容は国によって保証されたものではありません。
+            家賃、アクセス時間、洪水リスク、地震リスクなど、取得処理が未実装の固定値はスコア対象から外しています。必要なデータが取得できない場合、生成処理は固定値で補完せず失敗します。
           </p>
-          <p>出典：政府統計の総合窓口(e-Stat)</p>
+          <p>出典：政府統計の総合窓口(e-Stat)、警視庁公開データ、OpenStreetMap / Overpass API</p>
         </div>
         <details class="source-disclosure">
           <summary>データ元を見る</summary>
@@ -181,11 +163,11 @@
             <ul>
               <li>
                 <a href="https://www.e-stat.go.jp/" target="_blank" rel="noopener noreferrer">政府統計の総合窓口(e-Stat)</a>
-                : 令和2年国勢調査などの人口・世帯・住宅関連統計
+                : 令和2年国勢調査の人口関連統計
               </li>
               <li>警視庁公開データ: 区別の犯罪統計</li>
-              <li>OpenStreetMap / Overpass API: 駅、生活利便施設、避難所などの施設情報</li>
-              <li>国土数値情報・東京都防災関連オープンデータ等を基にした地理・防災関連指標</li>
+              <li>OpenStreetMap / Overpass API: 駅、鉄道路線、生活利便施設、避難所などの施設情報</li>
+              <li>同梱GeoJSON: 区境界から区面積を算出</li>
             </ul>
             <p>
               表示しているスコアやランキングは、上記データを区単位に加工・集計し、当サービス独自の評価ロジックで算出したものです。
