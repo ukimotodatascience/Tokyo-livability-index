@@ -14,8 +14,8 @@ const SCORE_METRICS = [
     weightKey: "accessibility",
     label: "アクセス",
     detailLabel: "交通アクセス",
-    positive: "人口あたりの駅・路線が多い",
-    caution: "人口あたりの駅・路線は控えめ",
+    positive: "面積あたりの駅・路線が多い",
+    caution: "面積あたりの駅・路線は控えめ",
   },
   {
     key: "score_safety",
