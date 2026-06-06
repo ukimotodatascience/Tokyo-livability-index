@@ -1,107 +1,87 @@
-import json
 import logging
-import math
+import re
 import sys
+from io import StringIO
 from pathlib import Path
 
 import pandas as pd
+import requests
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from src.config import DATA_RAW_DIR, ROOT_DIR, TOKYO_23_WARDS
+from src.config import DATA_RAW_DIR, GSI_AREA_DATA_URL, TOKYO_23_WARDS
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-TOKYO_WARDS_GEOJSON = ROOT_DIR / "data" / "raw" / "gis" / "tokyo_23wards.geojson"
-EARTH_RADIUS_KM = 6371.0088
-TOKYO_REFERENCE_LATITUDE = math.radians(35.68)
-
-
-def project_lon_lat(longitude, latitude):
-    x = EARTH_RADIUS_KM * math.radians(longitude) * math.cos(TOKYO_REFERENCE_LATITUDE)
-    y = EARTH_RADIUS_KM * math.radians(latitude)
-    return x, y
-
-
-def ring_area_km2(ring):
-    """Approximate local projected ring area using lon/lat coordinates."""
-    if len(ring) < 4:
-        return 0.0
-
-    projected = [project_lon_lat(lon, lat) for lon, lat in ring]
-    origin_x, origin_y = projected[0]
-    projected = [(x - origin_x, y - origin_y) for x, y in projected]
-    total = 0.0
-    for index, (x1, y1) in enumerate(projected):
-        x2, y2 = projected[(index + 1) % len(projected)]
-        total += x1 * y2 - x2 * y1
-
-    return abs(total) / 2
-
-
-def polygon_area_km2(polygon):
-    if not polygon:
-        return 0.0
-
-    outer_area = ring_area_km2(polygon[0])
-    holes_area = sum(ring_area_km2(ring) for ring in polygon[1:])
-    area = outer_area - holes_area
-    if area > 0:
-        return area
-
-    return sum(ring_area_km2(ring) for ring in polygon)
-
-
-def geometry_area_km2(geometry):
-    if geometry["type"] == "Polygon":
-        return polygon_area_km2(geometry["coordinates"])
-    if geometry["type"] == "MultiPolygon":
-        return sum(polygon_area_km2(polygon) for polygon in geometry["coordinates"])
-    raise ValueError(f"Unsupported geometry type: {geometry['type']}")
+AREA_COLUMN_PATTERN = re.compile(r"令和.+\(k㎡\)")
 
 
 def fetch_area_data(output_path=None):
-    """Calculate ward areas from the bundled Tokyo 23 ward GeoJSON."""
-    if not TOKYO_WARDS_GEOJSON.exists():
-        raise FileNotFoundError(f"Ward GeoJSON not found: {TOKYO_WARDS_GEOJSON}")
+    """Fetch official ward areas from GSI's municipal area CSV."""
+    logging.info("Downloading ward area data from: %s", GSI_AREA_DATA_URL)
+    try:
+        response = requests.get(GSI_AREA_DATA_URL, timeout=20)
+        response.raise_for_status()
+        content = response.content.decode("cp932", errors="ignore")
+        df_raw = pd.read_csv(StringIO(content), skiprows=4, dtype=str)
+    except Exception as exc:
+        raise RuntimeError("Failed to download ward area data.") from exc
 
-    with TOKYO_WARDS_GEOJSON.open(encoding="utf-8") as geojson_file:
-        geojson = json.load(geojson_file)
+    area_columns = [
+        column for column in df_raw.columns if AREA_COLUMN_PATTERN.fullmatch(column)
+    ]
+    if not area_columns:
+        raise ValueError("GSI area CSV does not contain an area column.")
 
-    rows = []
-    for feature in geojson.get("features", []):
-        code = str(feature.get("properties", {}).get("code", ""))
-        if code not in TOKYO_23_WARDS:
-            continue
-
-        area = round(geometry_area_km2(feature["geometry"]), 2)
-        if area <= 0:
-            raise ValueError(f"Calculated non-positive area for {code}.")
-
-        rows.append(
-            {
-                "code": code,
-                "ward_name": TOKYO_23_WARDS[code],
-                "ward_area_km2": area,
-            }
+    latest_area_column = area_columns[0]
+    code_column = "標準地域コード"
+    ward_column = "市区町村"
+    required_columns = {code_column, ward_column, latest_area_column}
+    missing_columns = sorted(required_columns - set(df_raw.columns))
+    if missing_columns:
+        raise ValueError(
+            f"GSI area CSV is missing columns: {', '.join(missing_columns)}"
         )
 
-    found_codes = {row["code"] for row in rows}
+    df_raw[code_column] = df_raw[code_column].astype(str).str.strip()
+    df = df_raw[df_raw[code_column].isin(TOKYO_23_WARDS)].copy()
+    df["ward_area_km2"] = pd.to_numeric(
+        df[latest_area_column].str.replace(",", "").str.strip(),
+        errors="coerce",
+    )
+    df["ward_name"] = df[code_column].map(TOKYO_23_WARDS)
+    df["source_ward_name"] = df[ward_column].astype(str).str.strip()
+
+    mismatched_names = df[df["ward_name"] != df["source_ward_name"]]
+    if not mismatched_names.empty:
+        mismatches = ", ".join(
+            f"{row[code_column]}:{row['source_ward_name']}"
+            for _, row in mismatched_names.iterrows()
+        )
+        raise ValueError(f"GSI area CSV has unexpected ward names: {mismatches}")
+
+    if df["ward_area_km2"].isna().any() or (df["ward_area_km2"] <= 0).any():
+        raise ValueError("GSI area CSV contains invalid ward area values.")
+
+    found_codes = set(df[code_column])
     missing_codes = sorted(set(TOKYO_23_WARDS) - found_codes)
     if missing_codes:
         missing_labels = ", ".join(
             f"{code}:{TOKYO_23_WARDS[code]}" for code in missing_codes
         )
-        raise ValueError(f"Missing ward geometry for: {missing_labels}")
+        raise ValueError(f"Missing ward area data for: {missing_labels}")
 
-    df = pd.DataFrame(sorted(rows, key=lambda row: row["code"]))
+    df = df.rename(columns={code_column: "code"})
+    df = df[["code", "ward_name", "ward_area_km2"]].sort_values("code")
+    df = df.reset_index(drop=True)
+
     if output_path is None:
         output_path = DATA_RAW_DIR / "area_data.csv"
     output_path = Path(output_path)
     df.to_csv(output_path, index=False, encoding="utf-8-sig")
-    logging.info("Saved calculated ward area data: %s", output_path)
+    logging.info("Saved official ward area data: %s", output_path)
     return df
 
 

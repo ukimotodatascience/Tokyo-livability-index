@@ -17,6 +17,7 @@ ESTAT_API_KEY = os.getenv("ESTAT_API_KEY", "")
 ESTAT_API_URL = "https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData"
 
 OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
+GSI_AREA_DATA_URL = "https://www.gsi.go.jp/KOKUJYOHO/MENCHO/backnumber/R8_01_mencho.csv"
 
 CRIME_DATA_URL = (
     "https://www.keishicho.metro.tokyo.lg.jp/about_mpd/jokyo_tokei/"

@@ -918,7 +918,7 @@ function renderDrilldown(row) {
         ["路線数", formatNumber(row.line_count)],
         ["駅密度", `${formatDecimal(row.station_density, 2)} / km2`],
       ],
-      note: "OSMで取得した駅数と鉄道路線relation数を、同梱GeoJSONから算出した区面積で密度化しています。",
+      note: "OSMで取得した駅数と鉄道路線relation数を、国土地理院の公表面積で密度化しています。",
     },
     {
       metric: "score_safety",
@@ -938,7 +938,7 @@ function renderDrilldown(row) {
         ["スーパー", formatNumber(row.supermarket_count)],
         ["医療施設", formatNumber(row.medical_facility_count)],
       ],
-      note: "OSMで取得した生活施設数を、同梱GeoJSONから算出した区面積で密度化しています。",
+      note: "OSMで取得した生活施設数を、国土地理院の公表面積で密度化しています。",
     },
     {
       metric: "score_resilience",
