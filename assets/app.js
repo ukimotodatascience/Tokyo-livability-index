@@ -80,20 +80,67 @@ const elements = {
 };
 
 function parseCsv(text) {
-  const cleanText = text.replace(/^\uFEFF/, "").trim();
+  const cleanText = normalizeCsvText(text).replace(/^\uFEFF/, "").trim();
   if (!cleanText) {
     return [];
   }
 
-  const [headerLine, ...lines] = cleanText.split(/\r?\n/);
-  const headers = headerLine.split(",");
-  return lines.map((line) => {
-    const values = line.split(",");
+  const [headers, ...lines] = parseCsvRecords(cleanText);
+  return lines.map((values) => {
     return headers.reduce((row, header, index) => {
       row[header] = values[index] ?? "";
       return row;
     }, {});
   });
+}
+
+function normalizeCsvText(text) {
+  if (typeof text === "string") {
+    return text;
+  }
+  if (text && typeof text.value === "string") {
+    return text.value;
+  }
+  return "";
+}
+
+function parseCsvRecords(text) {
+  const records = [];
+  let record = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      field += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      record.push(field);
+      field = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        index += 1;
+      }
+      record.push(field);
+      records.push(record);
+      record = [];
+      field = "";
+    } else {
+      field += char;
+    }
+  }
+
+  if (field || record.length > 0) {
+    record.push(field);
+    records.push(record);
+  }
+
+  return records;
 }
 
 function toNumber(value) {
