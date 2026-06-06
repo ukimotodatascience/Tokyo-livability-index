@@ -74,65 +74,76 @@ def build_filter_block(poi_type):
     )
 
 
-def build_overpass_count_query(ward_name):
+def ward_name_regex():
+    return "^(" + "|".join(TOKYO_23_WARDS.values()) + ")$"
+
+
+def build_bulk_overpass_count_query(poi_type):
     return f"""
-    [out:json][timeout:25];
+    [out:json][timeout:180];
     area["name"="東京都"]->.tokyo;
-    area["name"="{ward_name}"]["admin_level"="7"]->.ward;
-    (
-      {build_filter_block("convenience")}
+    area(area.tokyo)["admin_level"="7"]["name"~"{ward_name_regex()}"]->.wards;
+    foreach.wards->.ward(
+      .ward out tags;
+      (
+        {build_filter_block(poi_type)}
+      );
+      out count;
     );
-    out count;
-    (
-      {build_filter_block("supermarket")}
-    );
-    out count;
-    (
-      {build_filter_block("clinic")}
-    );
-    out count;
-    (
-      {build_filter_block("post_office")}
-    );
-    out count;
     """
 
 
-def query_overpass_for_ward(ward_name, max_retries=5):
-    """Count all POI categories for one ward via Overpass API."""
-    query = build_overpass_count_query(ward_name)
+def parse_bulk_count_response(data, label):
+    name_to_code = {name: code for code, name in TOKYO_23_WARDS.items()}
+    counts = {}
+    current_code = None
+
+    for element in data.get("elements", []):
+        tags = element.get("tags", {})
+        ward_name = tags.get("name")
+        if ward_name in name_to_code:
+            current_code = name_to_code[ward_name]
+            continue
+
+        total = tags.get("total")
+        if total is not None and current_code is not None:
+            counts[current_code] = int(total)
+            current_code = None
+
+    missing_codes = sorted(set(TOKYO_23_WARDS) - set(counts))
+    if missing_codes:
+        missing_labels = ", ".join(
+            f"{code}:{TOKYO_23_WARDS[code]}" for code in missing_codes
+        )
+        raise ValueError(f"{label} bulk response is missing: {missing_labels}")
+
+    return counts
+
+
+def query_overpass_for_category(poi_type, max_retries=5):
+    """Count one POI category for all wards in a single Overpass request."""
+    query = build_bulk_overpass_count_query(poi_type)
     headers = {"User-Agent": "TokyoLivabilityIndexBot/1.0 (contact: fuben@github)"}
 
     for attempt in range(1, max_retries + 1):
         try:
             time.sleep(1.0)
             response = requests.post(
-                OVERPASS_API_URL, data={"data": query}, headers=headers, timeout=45
+                OVERPASS_API_URL, data={"data": query}, headers=headers, timeout=180
             )
             response.raise_for_status()
-            counts = [
-                element.get("tags", {}).get("total")
-                for element in response.json().get("elements", [])
-            ]
-            if len(counts) != 4 or any(count is None for count in counts):
-                raise ValueError("Overpass response did not include expected counts.")
-            return {
-                "convenience": int(counts[0]),
-                "supermarket": int(counts[1]),
-                "clinic": int(counts[2]),
-                "post_office": int(counts[3]),
-            }
+            return parse_bulk_count_response(response.json(), f"OSM {poi_type}")
         except Exception as exc:
             if attempt == max_retries:
                 raise RuntimeError(
-                    f"Failed to fetch OSM POI counts for {ward_name}."
+                    f"Failed to fetch OSM {poi_type} counts for all wards."
                 ) from exc
             backoff_seconds = min(2**attempt, 30)
             logging.warning(
                 "Overpass query failed (%s/%s) for %s: %s",
                 attempt,
                 max_retries,
-                ward_name,
+                poi_type,
                 exc,
             )
             time.sleep(backoff_seconds)
@@ -140,20 +151,23 @@ def query_overpass_for_ward(ward_name, max_retries=5):
 
 def fetch_osm_data(use_existing_on_failure=True):
     """Fetch POI counts from OSM, reusing only a validated prior snapshot on outage."""
-    rows = []
     try:
+        category_counts = {
+            poi_type: query_overpass_for_category(poi_type)
+            for poi_type in ("convenience", "supermarket", "clinic", "post_office")
+        }
+        rows = []
         for code, name in TOKYO_23_WARDS.items():
-            counts = query_overpass_for_ward(name)
             rows.append(
                 {
                     "code": code,
                     "ward_name": name,
-                    "convenience_count": counts["convenience"],
-                    "supermarket_count": counts["supermarket"],
-                    "medical_facility_count": counts["clinic"],
-                    "daily_facility_count": counts["convenience"]
-                    + counts["supermarket"]
-                    + counts["post_office"],
+                    "convenience_count": category_counts["convenience"][code],
+                    "supermarket_count": category_counts["supermarket"][code],
+                    "medical_facility_count": category_counts["clinic"][code],
+                    "daily_facility_count": category_counts["convenience"][code]
+                    + category_counts["supermarket"][code]
+                    + category_counts["post_office"][code],
                 }
             )
     except Exception:

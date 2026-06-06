@@ -45,6 +45,10 @@ def load_existing_snapshot():
     return validate_complete_snapshot(df, "OSM spatial snapshot")
 
 
+def ward_name_regex():
+    return "^(" + "|".join(TOKYO_23_WARDS.values()) + ")$"
+
+
 def fetch_overpass_counts_with_retry(query, expected_counts, max_retries=5):
     """Return Overpass count results, failing instead of using static data."""
     for attempt in range(1, max_retries + 1):
@@ -54,7 +58,7 @@ def fetch_overpass_counts_with_retry(query, expected_counts, max_retries=5):
                 OVERPASS_API_URL,
                 data={"data": query},
                 headers=OVERPASS_HEADERS,
-                timeout=45,
+                timeout=180,
             )
             response.raise_for_status()
             counts = [
@@ -74,46 +78,115 @@ def fetch_overpass_counts_with_retry(query, expected_counts, max_retries=5):
             time.sleep(backoff_seconds)
 
 
-def build_spatial_query(ward_name):
+def parse_bulk_count_response(data, label):
+    name_to_code = {name: code for code, name in TOKYO_23_WARDS.items()}
+    counts = {}
+    current_code = None
+
+    for element in data.get("elements", []):
+        tags = element.get("tags", {})
+        ward_name = tags.get("name")
+        if ward_name in name_to_code:
+            current_code = name_to_code[ward_name]
+            continue
+
+        total = tags.get("total")
+        if total is not None and current_code is not None:
+            counts[current_code] = int(total)
+            current_code = None
+
+    missing_codes = sorted(set(TOKYO_23_WARDS) - set(counts))
+    if missing_codes:
+        missing_labels = ", ".join(
+            f"{code}:{TOKYO_23_WARDS[code]}" for code in missing_codes
+        )
+        raise ValueError(f"{label} bulk response is missing: {missing_labels}")
+
+    return counts
+
+
+def fetch_bulk_counts(query, label, max_retries=5):
+    for attempt in range(1, max_retries + 1):
+        try:
+            time.sleep(1.0)
+            response = requests.post(
+                OVERPASS_API_URL,
+                data={"data": query},
+                headers=OVERPASS_HEADERS,
+                timeout=180,
+            )
+            response.raise_for_status()
+            return parse_bulk_count_response(response.json(), label)
+        except Exception as exc:
+            if attempt == max_retries:
+                raise RuntimeError(f"Overpass {label} bulk request failed.") from exc
+            backoff_seconds = min(2**attempt, 30)
+            logging.warning(
+                "Overpass bulk request failed (%s/%s) for %s: %s",
+                attempt,
+                max_retries,
+                label,
+                exc,
+            )
+            time.sleep(backoff_seconds)
+
+
+def build_bulk_spatial_query(filter_block):
     return f"""
-    [out:json][timeout:25];
+    [out:json][timeout:180];
     area["name"="東京都"]->.tokyo;
-    area["name"="{ward_name}"]["admin_level"="7"]->.ward;
-    (
-      node["railway"="station"](area.ward);
-      way["railway"="station"](area.ward);
-      relation["railway"="station"](area.ward);
+    area(area.tokyo)["admin_level"="7"]["name"~"{ward_name_regex()}"]->.wards;
+    foreach.wards->.ward(
+      .ward out tags;
+      (
+        {filter_block}
+      );
+      out count;
     );
-    out count;
-    (
-      relation["type"="route"]["route"~"^(train|subway|light_rail|monorail|tram)$"](area.ward);
-    );
-    out count;
-    (
-      node["amenity"="shelter"](area.ward);
-      way["amenity"="shelter"](area.ward);
-      relation["amenity"="shelter"](area.ward);
-    );
-    out count;
     """
 
 
 def fetch_spatial_data(use_existing_on_failure=True):
     """Fetch OSM spatial counts, reusing only a validated prior snapshot on outage."""
-    rows = []
-
     try:
+        station_counts = fetch_bulk_counts(
+            build_bulk_spatial_query(
+                """
+      node["railway"="station"](area.ward);
+      way["railway"="station"](area.ward);
+      relation["railway"="station"](area.ward);
+                """
+            ),
+            "station",
+        )
+        line_counts = fetch_bulk_counts(
+            build_bulk_spatial_query(
+                """
+      relation["type"="route"]["route"~"^(train|subway|light_rail|monorail|tram)$"](area.ward);
+                """
+            ),
+            "railway route",
+        )
+        shelter_counts = fetch_bulk_counts(
+            build_bulk_spatial_query(
+                """
+      node["amenity"="shelter"](area.ward);
+      way["amenity"="shelter"](area.ward);
+      relation["amenity"="shelter"](area.ward);
+                """
+            ),
+            "shelter",
+        )
+
+        rows = []
         for code, name in TOKYO_23_WARDS.items():
-            station_count, line_count, shelter_count = fetch_overpass_counts_with_retry(
-                build_spatial_query(name), expected_counts=3
-            )
             rows.append(
                 {
                     "code": code,
                     "ward_name": name,
-                    "station_count": station_count,
-                    "line_count": line_count,
-                    "shelter_count": shelter_count,
+                    "station_count": station_counts[code],
+                    "line_count": line_counts[code],
+                    "shelter_count": shelter_counts[code],
                 }
             )
     except Exception:
