@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 
-def fetch_estat_data(api_key=ESTAT_API_KEY):
+def fetch_estat_data(api_key=ESTAT_API_KEY, output_path=None):
     """Fetch ward population from e-Stat without local fallback values."""
     if not api_key:
         raise ValueError("ESTAT_API_KEY is required to fetch e-Stat data.")
@@ -97,7 +97,9 @@ def fetch_estat_data(api_key=ESTAT_API_KEY):
         raise ValueError(f"Missing e-Stat population data for: {missing_labels}")
 
     df = pd.DataFrame([ward_data[code] for code in TOKYO_23_WARDS])
-    output_path = DATA_RAW_DIR / "estat_data.csv"
+    if output_path is None:
+        output_path = DATA_RAW_DIR / "estat_data.csv"
+    output_path = Path(output_path)
     df.to_csv(output_path, index=False, encoding="utf-8-sig")
     logging.info("Saved e-Stat population data: %s", output_path)
     return df

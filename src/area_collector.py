@@ -62,7 +62,7 @@ def geometry_area_km2(geometry):
     raise ValueError(f"Unsupported geometry type: {geometry['type']}")
 
 
-def fetch_area_data():
+def fetch_area_data(output_path=None):
     """Calculate ward areas from the bundled Tokyo 23 ward GeoJSON."""
     if not TOKYO_WARDS_GEOJSON.exists():
         raise FileNotFoundError(f"Ward GeoJSON not found: {TOKYO_WARDS_GEOJSON}")
@@ -97,7 +97,9 @@ def fetch_area_data():
         raise ValueError(f"Missing ward geometry for: {missing_labels}")
 
     df = pd.DataFrame(sorted(rows, key=lambda row: row["code"]))
-    output_path = DATA_RAW_DIR / "area_data.csv"
+    if output_path is None:
+        output_path = DATA_RAW_DIR / "area_data.csv"
+    output_path = Path(output_path)
     df.to_csv(output_path, index=False, encoding="utf-8-sig")
     logging.info("Saved calculated ward area data: %s", output_path)
     return df

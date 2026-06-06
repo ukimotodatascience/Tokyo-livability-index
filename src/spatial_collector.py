@@ -19,7 +19,7 @@ OUTPUT_PATH = DATA_RAW_DIR / "spatial_data.csv"
 OUTPUT_COLUMNS = ["code", "ward_name", "station_count", "line_count", "shelter_count"]
 
 
-def validate_complete_snapshot(df, label):
+def validate_complete_data(df, label):
     missing_columns = [column for column in OUTPUT_COLUMNS if column not in df.columns]
     if missing_columns:
         raise ValueError(f"{label} is missing columns: {', '.join(missing_columns)}")
@@ -35,14 +35,6 @@ def validate_complete_snapshot(df, label):
         )
 
     return df[OUTPUT_COLUMNS].sort_values("code").reset_index(drop=True)
-
-
-def load_existing_snapshot():
-    if not OUTPUT_PATH.exists():
-        raise FileNotFoundError(f"OSM spatial snapshot not found: {OUTPUT_PATH}")
-
-    df = pd.read_csv(OUTPUT_PATH, dtype={"code": str})
-    return validate_complete_snapshot(df, "OSM spatial snapshot")
 
 
 def ward_name_regex():
@@ -146,61 +138,55 @@ def build_bulk_spatial_query(filter_block):
     """
 
 
-def fetch_spatial_data(use_existing_on_failure=True):
-    """Fetch OSM spatial counts, reusing only a validated prior snapshot on outage."""
-    try:
-        station_counts = fetch_bulk_counts(
-            build_bulk_spatial_query(
-                """
+def fetch_spatial_data(output_path=None):
+    """Fetch OSM spatial counts without local fallback values."""
+    station_counts = fetch_bulk_counts(
+        build_bulk_spatial_query(
+            """
       node["railway"="station"](area.ward);
       way["railway"="station"](area.ward);
       relation["railway"="station"](area.ward);
-                """
-            ),
-            "station",
-        )
-        line_counts = fetch_bulk_counts(
-            build_bulk_spatial_query(
-                """
+            """
+        ),
+        "station",
+    )
+    line_counts = fetch_bulk_counts(
+        build_bulk_spatial_query(
+            """
       relation["type"="route"]["route"~"^(train|subway|light_rail|monorail|tram)$"](area.ward);
-                """
-            ),
-            "railway route",
-        )
-        shelter_counts = fetch_bulk_counts(
-            build_bulk_spatial_query(
-                """
+            """
+        ),
+        "railway route",
+    )
+    shelter_counts = fetch_bulk_counts(
+        build_bulk_spatial_query(
+            """
       node["amenity"="shelter"](area.ward);
       way["amenity"="shelter"](area.ward);
       relation["amenity"="shelter"](area.ward);
-                """
-            ),
-            "shelter",
+            """
+        ),
+        "shelter",
+    )
+
+    rows = []
+    for code, name in TOKYO_23_WARDS.items():
+        rows.append(
+            {
+                "code": code,
+                "ward_name": name,
+                "station_count": station_counts[code],
+                "line_count": line_counts[code],
+                "shelter_count": shelter_counts[code],
+            }
         )
 
-        rows = []
-        for code, name in TOKYO_23_WARDS.items():
-            rows.append(
-                {
-                    "code": code,
-                    "ward_name": name,
-                    "station_count": station_counts[code],
-                    "line_count": line_counts[code],
-                    "shelter_count": shelter_counts[code],
-                }
-            )
-    except Exception:
-        if not use_existing_on_failure:
-            raise
-        logging.warning(
-            "OSM spatial live refresh failed. Using validated existing snapshot: %s",
-            OUTPUT_PATH,
-        )
-        return load_existing_snapshot()
-
-    df = validate_complete_snapshot(pd.DataFrame(rows), "OSM spatial live data")
-    df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
-    logging.info("Saved OSM spatial data: %s", OUTPUT_PATH)
+    df = validate_complete_data(pd.DataFrame(rows), "OSM spatial live data")
+    if output_path is None:
+        output_path = OUTPUT_PATH
+    output_path = Path(output_path)
+    df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    logging.info("Saved OSM spatial data: %s", output_path)
     return df
 
 

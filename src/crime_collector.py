@@ -25,7 +25,7 @@ SOURCE_COLUMNS = {
 }
 
 
-def fetch_crime_data():
+def fetch_crime_data(output_path=None):
     """Fetch and aggregate ward crime data from the Metropolitan Police CSV."""
     logging.info("Downloading crime data from: %s", CRIME_DATA_URL)
     try:
@@ -95,7 +95,9 @@ def fetch_crime_data():
     ]
     df = grouped[final_cols].sort_values("code").reset_index(drop=True)
 
-    output_path = DATA_RAW_DIR / "crime_data.csv"
+    if output_path is None:
+        output_path = DATA_RAW_DIR / "crime_data.csv"
+    output_path = Path(output_path)
     df.to_csv(output_path, index=False, encoding="utf-8-sig")
     logging.info("Saved crime data: %s", output_path)
     return df

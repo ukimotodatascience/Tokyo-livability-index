@@ -2,12 +2,13 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.area_collector import fetch_area_data
-from src.config import DATA_PROCESSED_DIR, TOKYO_23_WARDS
+from src.config import DATA_PROCESSED_DIR, DATA_RAW_DIR, TOKYO_23_WARDS
 from src.crime_collector import fetch_crime_data
 from src.estat_collector import fetch_estat_data
 from src.osm_collector import fetch_osm_data
@@ -16,6 +17,15 @@ from src.spatial_collector import fetch_spatial_data
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+RAW_OUTPUT_PATHS = {
+    "estat": DATA_RAW_DIR / "estat_data.csv",
+    "crime": DATA_RAW_DIR / "crime_data.csv",
+    "osm": DATA_RAW_DIR / "osm_poi_data.csv",
+    "spatial": DATA_RAW_DIR / "spatial_data.csv",
+    "area": DATA_RAW_DIR / "area_data.csv",
+}
+PROCESSED_OUTPUT_PATH = DATA_PROCESSED_DIR / "tokyo_livability_index.csv"
 
 
 def min_max_normalize(series, invert=False):
@@ -190,32 +200,46 @@ def build_scores(master_df):
 def run_pipeline():
     logging.info("Starting Tokyo livability data pipeline.")
 
-    estat_df = fetch_estat_data()
-    crime_df = fetch_crime_data()
-    osm_df = fetch_osm_data()
-    spatial_df = fetch_spatial_data()
-    area_df = fetch_area_data()
+    with TemporaryDirectory(prefix=".tmp_update_", dir=DATA_RAW_DIR) as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        temp_raw_paths = {
+            source_name: temp_dir / final_path.name
+            for source_name, final_path in RAW_OUTPUT_PATHS.items()
+        }
+        temp_processed_path = temp_dir / PROCESSED_OUTPUT_PATH.name
 
-    master_df = merge_source_data(estat_df, crime_df, osm_df, spatial_df, area_df)
-    output_df = build_scores(master_df)
+        estat_df = fetch_estat_data(output_path=temp_raw_paths["estat"])
+        crime_df = fetch_crime_data(output_path=temp_raw_paths["crime"])
+        osm_df = fetch_osm_data(output_path=temp_raw_paths["osm"])
+        spatial_df = fetch_spatial_data(output_path=temp_raw_paths["spatial"])
+        area_df = fetch_area_data(output_path=temp_raw_paths["area"])
 
-    final_cols = [
-        "code",
-        "ward_name",
-        "population",
-        "ward_area_km2",
-        "score_accessibility",
-        "score_safety",
-        "score_convenience",
-        "score_resilience",
-        "recommended_profile",
-    ]
+        master_df = merge_source_data(estat_df, crime_df, osm_df, spatial_df, area_df)
+        output_df = build_scores(master_df)
 
-    output_path = DATA_PROCESSED_DIR / "tokyo_livability_index.csv"
-    output_df[final_cols].to_csv(output_path, index=False, encoding="utf-8-sig")
-    logging.info("Saved processed livability index: %s", output_path)
-    print(output_df[final_cols].head(5).to_string(index=False))
-    return output_df[final_cols]
+        final_cols = [
+            "code",
+            "ward_name",
+            "population",
+            "ward_area_km2",
+            "score_accessibility",
+            "score_safety",
+            "score_convenience",
+            "score_resilience",
+            "recommended_profile",
+        ]
+
+        final_df = output_df[final_cols]
+        final_df.to_csv(temp_processed_path, index=False, encoding="utf-8-sig")
+
+        for source_name, final_path in RAW_OUTPUT_PATHS.items():
+            temp_raw_paths[source_name].replace(final_path)
+            logging.info("Saved raw %s data: %s", source_name, final_path)
+        temp_processed_path.replace(PROCESSED_OUTPUT_PATH)
+        logging.info("Saved processed livability index: %s", PROCESSED_OUTPUT_PATH)
+
+    print(final_df.head(5).to_string(index=False))
+    return final_df
 
 
 if __name__ == "__main__":
