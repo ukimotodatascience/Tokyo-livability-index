@@ -52,6 +52,11 @@ def fetch_crime_data(output_path=None):
 
     df_raw["code"] = df_raw[SOURCE_COLUMNS["address"]].apply(map_to_ward)
     df_wards = df_raw[df_raw["code"].notna()].copy()
+    address_col = SOURCE_COLUMNS["address"]
+    subtotal_labels = set(TOKYO_23_WARDS.values()) | {
+        f"{name}計" for name in TOKYO_23_WARDS.values()
+    }
+    df_wards = df_wards[~df_wards[address_col].isin(subtotal_labels)].copy()
 
     numeric_cols = [
         SOURCE_COLUMNS["total"],
