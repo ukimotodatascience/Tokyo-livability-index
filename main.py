@@ -65,7 +65,7 @@ def add_ward_characteristics(df):
 
         if row["score_accessibility"] >= 75:
             traits.append(
-                "人口あたりの駅数・路線数が多く、鉄道アクセスを重視する人に向いています。"
+                "面積あたりの駅数・路線数が多く、鉄道アクセスを重視する人に向いています。"
             )
         if row["score_safety"] >= 75:
             traits.append("人口あたりの犯罪件数が比較的少ないエリアです。")
