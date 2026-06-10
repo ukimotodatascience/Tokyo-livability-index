@@ -216,7 +216,11 @@ async function loadData() {
 
     [
       "population",
+      "population_total",
       "ward_area_km2",
+      "area_km2",
+      "population_density",
+      "avg_household_size",
       "score_accessibility",
       "score_safety",
       "score_convenience",
@@ -224,17 +228,29 @@ async function loadData() {
       "score_affordability",
       "score_livability",
       "station_count",
+      "station_density",
       "line_count",
+      "line_density",
       "shelter_count",
+      "shelter_per_10k",
+      "shelter_density",
       "total_crime_cases",
       "serious_crime_cases",
       "violent_crime_cases",
       "theft_crime_cases",
       "other_crime_cases",
       "convenience_count",
+      "convenience_store_count",
+      "convenience_store_per_10k",
+      "convenience_store_per_km2",
       "supermarket_count",
+      "supermarket_per_10k",
+      "supermarket_per_km2",
       "medical_facility_count",
+      "medical_facility_per_10k",
+      "medical_facility_per_km2",
       "daily_facility_count",
+      "daily_facility_density",
       "rent_monthly_avg",
       "time_to_tokyo_min",
       "time_to_shinjuku_min",
@@ -243,13 +259,20 @@ async function loadData() {
       "time_to_shinagawa_min",
       "avg_time_to_major_stations_min",
       "crime_total_count",
+      "crime_total_per_10k",
+      "crime_density_per_km2",
       "violent_crime_count",
+      "violent_crime_per_10k",
       "theft_count",
+      "theft_per_10k",
       "bicycle_theft_count",
+      "bicycle_theft_per_10k",
       "burglary_count",
+      "burglary_per_10k",
       "crime_yoy_rate",
       "flood_risk_area_ratio",
       "liquefaction_high_area_ratio",
+      "major_road_density",
       "park_area_total",
     ].forEach((key) => {
       merged[key] = toNumber(merged[key]);
@@ -746,12 +769,24 @@ function renderCompare() {
   elements.compareContent.className = "compare-table-wrap";
   const metrics = [
     ["おすすめ度", "personalizedScore", "higher"],
-    ["人口", "population", "higher", formatNumber],
-    ["面積(km2)", "ward_area_km2", "higher", (value) => formatDecimal(value, 2)],
+    ["人口 (人)", "population", "higher", formatNumber],
+    ["人口密度 (人/km2)", "population_density", "higher", (value) => formatDecimal(value, 1)],
+    ["1世帯平均人数 (人)", "avg_household_size", "higher", (value) => formatDecimal(value, 2)],
+    ["面積 (km2)", "ward_area_km2", "higher", (value) => formatDecimal(value, 2)],
     ["駅数", "station_count", "higher", formatNumber],
+    ["駅密度 (駅/km2)", "station_density", "higher", (value) => formatDecimal(value, 2)],
     ["路線数", "line_count", "higher", formatNumber],
-    ["犯罪/千人", "crime_rate_per_1000", "lower", (value) => formatDecimal(value, 2)],
-    ["避難所/万人", "shelter_rate_per_10000", "higher", (value) => formatDecimal(value, 2)],
+    ["総犯罪数 (件)", "crime_total_count", "lower", formatNumber],
+    ["犯罪率 (件/万人)", "crime_total_per_10k", "lower", (value) => formatDecimal(value, 1)],
+    ["犯罪密度 (件/km2)", "crime_density_per_km2", "lower", (value) => formatDecimal(value, 1)],
+    ["スーパー数 (店舗)", "supermarket_count", "higher", formatNumber],
+    ["スーパー (店舗/万人)", "supermarket_per_10k", "higher", (value) => formatDecimal(value, 2)],
+    ["コンビニ数 (店舗)", "convenience_count", "higher", formatNumber],
+    ["コンビニ (店舗/万人)", "convenience_store_per_10k", "higher", (value) => formatDecimal(value, 2)],
+    ["避難所数 (箇所)", "shelter_count", "higher", formatNumber],
+    ["避難所 (箇所/万人)", "shelter_per_10k", "higher", (value) => formatDecimal(value, 2)],
+    ["避難所密度 (箇所/km2)", "shelter_density", "higher", (value) => formatDecimal(value, 2)],
+    ["幹線道路密度 (km/km2)", "major_road_density", "higher", (value) => formatDecimal(value, 2)],
     ...availableScoreMetrics().map((metric) => [metric.label, metric.key, "higher"]),
   ];
 
@@ -886,6 +921,8 @@ function renderDrawer(row) {
         <div class="drawer-score-row">
           <span class="score-pill">${row.personalizedScore.toFixed(1)}<span>おすすめ度</span></span>
           <span class="score-pill">${formatNumber(row.population)}人<span>人口</span></span>
+          <span class="score-pill">${formatDecimal(row.population_density, 0)}人/km2<span>人口密度</span></span>
+          <span class="score-pill">${formatDecimal(row.avg_household_size, 2)}人<span>平均世帯人数</span></span>
           <span class="score-pill">${formatDecimal(row.ward_area_km2, 2)}<span>km2</span></span>
         </div>
         <div class="tag-row">
@@ -966,8 +1003,8 @@ function renderDrilldown(row) {
       source: "OpenStreetMap / Overpass API / 路線アクセス時間マスタ",
       values: [
         ["主要駅アクセス", `${formatDecimal(row.avg_time_to_major_stations_min)} 分`],
-        ["駅密度", `${formatDecimal(row.station_density, 2)} / km2`],
-        ["路線数", formatNumber(row.line_count)],
+        ["駅密度", `${formatDecimal(row.station_density, 2)} 駅/km2`],
+        ["路線数", `${formatNumber(row.line_count)} 路線`],
       ],
       note: "駅・路線の密度に加え、主要駅（東京・新宿・渋谷・池袋・品川）までの平均所要時間を加味しています。",
     },
@@ -975,9 +1012,11 @@ function renderDrilldown(row) {
       metric: "score_safety",
       source: "警視庁公開犯罪統計CSV (R5確定値) + e-Stat人口",
       values: [
-        ["総犯罪件数", formatNumber(row.crime_total_count)],
-        ["粗暴・凶悪犯数", formatNumber(row.violent_crime_count)],
-        ["自転車盗数", formatNumber(row.bicycle_theft_count)],
+        ["総犯罪件数", `${formatNumber(row.crime_total_count)} 件`],
+        ["犯罪率 (万人あたり)", `${formatDecimal(row.crime_total_per_10k, 1)} 件`],
+        ["犯罪密度 (/km2)", `${formatDecimal(row.crime_density_per_km2, 1)} 件`],
+        ["粗暴・凶悪犯数", `${formatNumber(row.violent_crime_count)} 件`],
+        ["自転車盗数", `${formatNumber(row.bicycle_theft_count)} 件`],
         ["犯罪前年比", `${(row.crime_yoy_rate * 100).toFixed(2)} %`],
       ],
       note: "警視庁の最新罪種別犯罪認知件数を、e-Stat人口と組み合わせた人口あたり犯罪率および前年比で評価しています。",
@@ -986,21 +1025,29 @@ function renderDrilldown(row) {
       metric: "score_convenience",
       source: "OpenStreetMap / Overpass API",
       values: [
-        ["コンビニ数", formatNumber(row.convenience_count)],
-        ["スーパー数", formatNumber(row.supermarket_count)],
-        ["医療施設数", formatNumber(row.medical_facility_count)],
+        ["コンビニ数", `${formatNumber(row.convenience_count)} 店`],
+        ["コンビニ (万人あたり)", `${formatDecimal(row.convenience_store_per_10k, 2)} 店`],
+        ["コンビニ密度", `${formatDecimal(row.convenience_store_per_km2, 2)} 店/km2`],
+        ["スーパー数", `${formatNumber(row.supermarket_count)} 店`],
+        ["スーパー (万人あたり)", `${formatDecimal(row.supermarket_per_10k, 2)} 店`],
+        ["スーパー密度", `${formatDecimal(row.supermarket_per_km2, 2)} 店/km2`],
+        ["医療施設数", `${formatNumber(row.medical_facility_count)} 箇所`],
+        ["医療施設 (万人あたり)", `${formatDecimal(row.medical_facility_per_10k, 2)} 箇所`],
+        ["医療施設密度", `${formatDecimal(row.medical_facility_per_km2, 2)} 箇所/km2`],
       ],
-      note: "日常の買い物施設数やクリニックの施設数を、面積あたりに密度化して算出しています。",
+      note: "日常の買い物施設数やクリニックの施設数を、人口あたりおよび面積あたりの密度として算出しています。",
     },
     {
       metric: "score_resilience",
       source: "東京都ハザードマップ統計 / OpenStreetMap / Overpass API",
       values: [
-        ["避難所/万人", formatDecimal(row.shelter_rate_per_10000, 2)],
+        ["避難所数", `${formatNumber(row.shelter_count)} 箇所`],
+        ["避難所 (万人あたり)", `${formatDecimal(row.shelter_per_10k, 2)} 箇所`],
+        ["避難所密度", `${formatDecimal(row.shelter_density, 2)} 箇所/km2`],
         ["洪水想定エリア", `${(row.flood_risk_area_ratio * 100).toFixed(1)} %`],
         ["液状化高リスク", `${(row.liquefaction_high_area_ratio * 100).toFixed(1)} %`],
       ],
-      note: "人口あたりの避難所密度に加え、区全体の洪水想定区域や液状化高リスクエリアの面積比率をマイナス加算しています。",
+      note: "人口あたり・面積あたりの避難所密度に加え、区全体の洪水想定区域や液状化高リスクエリアの面積比率をマイナス加算しています。",
     },
     {
       metric: "score_livability",
@@ -1008,8 +1055,9 @@ function renderDrilldown(row) {
       values: [
         ["若年層比率 (20-30代)", `${((row.age_20s_ratio + row.age_30s_ratio) * 100).toFixed(1)} %`],
         ["公園総面積", `${formatNumber(row.park_area_total)} ㎡`],
+        ["幹線道路密度", `${formatDecimal(row.major_road_density, 2)} km/km2`],
       ],
-      note: "若い単身世帯が好む街の活性度（20代・30代比率）と、1人あたりの公園緑地面積を評価しています。",
+      note: "若い単身世帯が好む街の活性度（20代・30代比率）と、幹線道路密度、1人あたりの公園緑地面積を評価しています。",
     },
   ];
 
