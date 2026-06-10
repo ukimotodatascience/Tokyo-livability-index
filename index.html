@@ -44,6 +44,9 @@
           <button class="preset-button active" data-preset="balanced" type="button">
             指定なし
           </button>
+          <button class="preset-button" data-preset="affordability" type="button">
+            家賃の安さ
+          </button>
           <button class="preset-button" data-preset="safety" type="button">
             安心
           </button>
@@ -54,7 +57,10 @@
             生活利便性
           </button>
           <button class="preset-button" data-preset="resilience" type="button">
-            避難所
+            防災
+          </button>
+          <button class="preset-button" data-preset="livability" type="button">
+            住環境
           </button>
         </div>
 
@@ -63,10 +69,12 @@
             <span>並び替え</span>
             <select id="sort-mode">
               <option value="personalized">おすすめ度</option>
+              <option value="affordability">家賃が安い順</option>
               <option value="safety">治安が良い順</option>
               <option value="accessibility">アクセスが良い順</option>
               <option value="convenience">生活利便性が高い順</option>
-              <option value="resilience">避難所スコアが高い順</option>
+              <option value="resilience">防災スコアが高い順</option>
+              <option value="livability">住環境が良い順</option>
             </select>
           </label>
         </div>
@@ -102,10 +110,12 @@
               <span>色分け</span>
               <select id="map-metric">
                 <option value="personalizedScore">おすすめ度</option>
+                <option value="score_affordability">住居コスト</option>
                 <option value="score_accessibility">アクセス</option>
                 <option value="score_safety">治安</option>
                 <option value="score_convenience">生活利便性</option>
-                <option value="score_resilience">避難所</option>
+                <option value="score_resilience">防災・災害</option>
+                <option value="score_livability">住環境</option>
               </select>
             </label>
           </div>
