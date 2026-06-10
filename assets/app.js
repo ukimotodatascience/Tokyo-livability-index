@@ -10,12 +10,20 @@ const DATA_PATHS = {
 
 const SCORE_METRICS = [
   {
+    key: "score_affordability",
+    weightKey: "affordability",
+    label: "住居コスト",
+    detailLabel: "住居コスト・家賃",
+    positive: "家賃相場が比較的安い",
+    caution: "家賃相場が高め",
+  },
+  {
     key: "score_accessibility",
     weightKey: "accessibility",
     label: "アクセス",
     detailLabel: "交通アクセス",
-    positive: "面積あたりの駅・路線が多い",
-    caution: "面積あたりの駅・路線は控えめ",
+    positive: "主要駅へのアクセスが良い",
+    caution: "主要駅へのアクセス時間が長め",
   },
   {
     key: "score_safety",
@@ -30,25 +38,35 @@ const SCORE_METRICS = [
     weightKey: "convenience",
     label: "生活利便性",
     detailLabel: "生活利便性",
-    positive: "生活施設が多い",
+    positive: "買い物・医療施設が多い",
     caution: "生活施設は控えめ",
   },
   {
     key: "score_resilience",
     weightKey: "resilience",
-    label: "避難所",
-    detailLabel: "避難所",
-    positive: "人口あたりの避難所が多い",
-    caution: "人口あたりの避難所は控えめ",
+    label: "防災・災害",
+    detailLabel: "防災・災害リスク",
+    positive: "水害リスクが低く、避難所が多い",
+    caution: "ハザードマップ（浸水リスク等）要確認",
+  },
+  {
+    key: "score_livability",
+    weightKey: "livability",
+    label: "住環境",
+    detailLabel: "住環境・ライフスタイル",
+    positive: "若年単身層が多く、緑が豊か",
+    caution: "単身割合や公園面積は控えめ",
   },
 ];
 
 const PRESETS = {
   balanced: [],
-  safety: ["safety", "resilience", "convenience", "accessibility"],
-  access: ["accessibility", "convenience", "safety", "resilience"],
-  convenience: ["convenience", "accessibility", "safety", "resilience"],
-  resilience: ["resilience", "safety", "accessibility", "convenience"],
+  safety: ["safety", "resilience", "convenience", "accessibility", "affordability", "livability"],
+  access: ["accessibility", "convenience", "safety", "resilience", "affordability", "livability"],
+  convenience: ["convenience", "accessibility", "safety", "resilience", "affordability", "livability"],
+  resilience: ["resilience", "safety", "accessibility", "convenience", "affordability", "livability"],
+  affordability: ["affordability", "convenience", "safety", "accessibility", "resilience", "livability"],
+  livability: ["livability", "convenience", "safety", "accessibility", "resilience", "affordability"],
 };
 
 const MOBILE_RANKING_LIMIT = 4;
@@ -203,6 +221,8 @@ async function loadData() {
       "score_safety",
       "score_convenience",
       "score_resilience",
+      "score_affordability",
+      "score_livability",
       "station_count",
       "line_count",
       "shelter_count",
@@ -215,6 +235,22 @@ async function loadData() {
       "supermarket_count",
       "medical_facility_count",
       "daily_facility_count",
+      "rent_monthly_avg",
+      "time_to_tokyo_min",
+      "time_to_shinjuku_min",
+      "time_to_shibuya_min",
+      "time_to_ikebukuro_min",
+      "time_to_shinagawa_min",
+      "avg_time_to_major_stations_min",
+      "crime_total_count",
+      "violent_crime_count",
+      "theft_count",
+      "bicycle_theft_count",
+      "burglary_count",
+      "crime_yoy_rate",
+      "flood_risk_area_ratio",
+      "liquefaction_high_area_ratio",
+      "park_area_total",
     ].forEach((key) => {
       merged[key] = toNumber(merged[key]);
     });
@@ -420,6 +456,9 @@ function uniqueList(items) {
 function getFilteredRows() {
   const sortMode = elements.sortMode.value;
   return [...state.rows].sort((a, b) => {
+    if (sortMode === "affordability") {
+      return b.score_affordability - a.score_affordability;
+    }
     if (sortMode === "safety") {
       return b.score_safety - a.score_safety;
     }
@@ -431,6 +470,9 @@ function getFilteredRows() {
     }
     if (sortMode === "resilience") {
       return b.score_resilience - a.score_resilience;
+    }
+    if (sortMode === "livability") {
+      return b.score_livability - a.score_livability;
     }
     return b.personalizedScore - a.personalizedScore;
   });
@@ -911,43 +953,63 @@ function renderRadar(row) {
 function renderDrilldown(row) {
   const details = [
     {
-      metric: "score_accessibility",
-      source: "OpenStreetMap / Overpass API",
+      metric: "score_affordability",
+      source: "住宅・土地統計調査 / 民間家賃相場マスタ",
       values: [
-        ["駅数", formatNumber(row.station_count)],
-        ["路線数", formatNumber(row.line_count)],
-        ["駅密度", `${formatDecimal(row.station_density, 2)} / km2`],
+        ["平均月額家賃", `${formatNumber(row.rent_monthly_avg)} 円`],
+        ["畳あたり家賃", `${formatNumber(row.rent_per_tatami)} 円`],
       ],
-      note: "OSMで取得した駅数と鉄道路線relation数を、国土地理院の公表面積で密度化しています。",
+      note: "23区のワンルーム/1K平均家賃相場と、1畳あたりの家賃コストをスコア化しています。",
+    },
+    {
+      metric: "score_accessibility",
+      source: "OpenStreetMap / Overpass API / 路線アクセス時間マスタ",
+      values: [
+        ["主要駅アクセス", `${formatDecimal(row.avg_time_to_major_stations_min)} 分`],
+        ["駅密度", `${formatDecimal(row.station_density, 2)} / km2`],
+        ["路線数", formatNumber(row.line_count)],
+      ],
+      note: "駅・路線の密度に加え、主要駅（東京・新宿・渋谷・池袋・品川）までの平均所要時間を加味しています。",
     },
     {
       metric: "score_safety",
-      source: "警視庁公開CSV + e-Stat人口",
+      source: "警視庁公開犯罪統計CSV (R5確定値) + e-Stat人口",
       values: [
-        ["総犯罪件数", formatNumber(row.total_crime_cases)],
-        ["犯罪/千人", formatDecimal(row.crime_rate_per_1000, 2)],
-        ["凶悪犯/万人", formatDecimal(row.serious_crime_rate_per_10000, 2)],
+        ["総犯罪件数", formatNumber(row.crime_total_count)],
+        ["粗暴・凶悪犯数", formatNumber(row.violent_crime_count)],
+        ["自転車盗数", formatNumber(row.bicycle_theft_count)],
+        ["犯罪前年比", `${(row.crime_yoy_rate * 100).toFixed(2)} %`],
       ],
-      note: "警視庁CSVの件数を、e-Stat人口で人口あたりに変換しています。",
+      note: "警視庁の最新罪種別犯罪認知件数を、e-Stat人口と組み合わせた人口あたり犯罪率および前年比で評価しています。",
     },
     {
       metric: "score_convenience",
       source: "OpenStreetMap / Overpass API",
       values: [
-        ["コンビニ", formatNumber(row.convenience_count)],
-        ["スーパー", formatNumber(row.supermarket_count)],
-        ["医療施設", formatNumber(row.medical_facility_count)],
+        ["コンビニ数", formatNumber(row.convenience_count)],
+        ["スーパー数", formatNumber(row.supermarket_count)],
+        ["医療施設数", formatNumber(row.medical_facility_count)],
       ],
-      note: "OSMで取得した生活施設数を、国土地理院の公表面積で密度化しています。",
+      note: "日常の買い物施設数やクリニックの施設数を、面積あたりに密度化して算出しています。",
     },
     {
       metric: "score_resilience",
-      source: "OpenStreetMap / Overpass API + e-Stat人口",
+      source: "東京都ハザードマップ統計 / OpenStreetMap / Overpass API",
       values: [
-        ["避難所数", formatNumber(row.shelter_count)],
         ["避難所/万人", formatDecimal(row.shelter_rate_per_10000, 2)],
+        ["洪水想定エリア", `${(row.flood_risk_area_ratio * 100).toFixed(1)} %`],
+        ["液状化高リスク", `${(row.liquefaction_high_area_ratio * 100).toFixed(1)} %`],
       ],
-      note: "OSMで取得した避難所数のみを使っています。固定の洪水・地震リスク値は使っていません。",
+      note: "人口あたりの避難所密度に加え、区全体の洪水想定区域や液状化高リスクエリアの面積比率をマイナス加算しています。",
+    },
+    {
+      metric: "score_livability",
+      source: "国勢調査年齢別統計 / 東京都都市公園統計マスタ",
+      values: [
+        ["若年層比率 (20-30代)", `${((row.age_20s_ratio + row.age_30s_ratio) * 100).toFixed(1)} %`],
+        ["公園総面積", `${formatNumber(row.park_area_total)} ㎡`],
+      ],
+      note: "若い単身世帯が好む街の活性度（20代・30代比率）と、1人あたりの公園緑地面積を評価しています。",
     },
   ];
 

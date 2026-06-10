@@ -21,6 +21,7 @@ SOURCE_COLUMNS = {
     "violent": "粗暴犯計",
     "burglary": "侵入窃盗計",
     "non_burglary": "非侵入窃盗計",
+    "bicycle_theft": "非侵入窃盗自転車盗",
     "other": "その他計",
 }
 
@@ -64,6 +65,7 @@ def fetch_crime_data(output_path=None):
         SOURCE_COLUMNS["violent"],
         SOURCE_COLUMNS["burglary"],
         SOURCE_COLUMNS["non_burglary"],
+        SOURCE_COLUMNS["bicycle_theft"],
         SOURCE_COLUMNS["other"],
     ]
     for col in numeric_cols:
@@ -80,6 +82,39 @@ def fetch_crime_data(output_path=None):
         )
         raise ValueError(f"Missing crime data for: {missing_labels}")
 
+    # Fetch R4 (previous year) data to calculate YoY rate
+    yoy_rates = {}
+    crime_url_r4 = CRIME_DATA_URL.replace("R5.csv", "R4.csv")
+    logging.info("Downloading previous year crime data from: %s", crime_url_r4)
+    try:
+        res_r4 = requests.get(crime_url_r4, timeout=15)
+        res_r4.raise_for_status()
+        content_r4 = res_r4.content.decode("cp932", errors="ignore")
+        df_raw_r4 = pd.read_csv(StringIO(content_r4))
+        df_raw_r4.columns = df_raw_r4.columns.str.strip()
+        df_raw_r4["code"] = df_raw_r4[SOURCE_COLUMNS["address"]].apply(map_to_ward)
+        df_wards_r4 = df_raw_r4[df_raw_r4["code"].notna()].copy()
+        df_wards_r4 = df_wards_r4[
+            ~df_wards_r4[address_col].isin(subtotal_labels)
+        ].copy()
+
+        col_total = SOURCE_COLUMNS["total"]
+        df_wards_r4[col_total] = (
+            df_wards_r4[col_total].astype(str).str.replace(",", "").str.strip()
+        )
+        df_wards_r4[col_total] = (
+            pd.to_numeric(df_wards_r4[col_total], errors="coerce").fillna(0).astype(int)
+        )
+
+        grouped_r4 = df_wards_r4.groupby("code").sum(numeric_only=True).reset_index()
+        for _, row in grouped_r4.iterrows():
+            yoy_rates[row["code"]] = row[col_total]
+    except Exception as exc:
+        logging.warning(
+            "Failed to download or parse previous year crime data. YoY rates set to 0: %s",
+            exc,
+        )
+
     grouped["ward_name"] = grouped["code"].map(TOKYO_23_WARDS)
     grouped["total_crime_cases"] = grouped[SOURCE_COLUMNS["total"]]
     grouped["serious_crime_cases"] = grouped[SOURCE_COLUMNS["serious"]]
@@ -89,6 +124,25 @@ def fetch_crime_data(output_path=None):
     )
     grouped["other_crime_cases"] = grouped[SOURCE_COLUMNS["other"]]
 
+    # New columns matching tables definition
+    grouped["crime_total_count"] = grouped["total_crime_cases"]
+    grouped["violent_crime_count"] = (
+        grouped["serious_crime_cases"] + grouped["violent_crime_cases"]
+    )
+    grouped["theft_count"] = grouped["theft_crime_cases"]
+    grouped["bicycle_theft_count"] = grouped[SOURCE_COLUMNS["bicycle_theft"]]
+    grouped["burglary_count"] = grouped[SOURCE_COLUMNS["burglary"]]
+
+    def calc_yoy(row):
+        code = row["code"]
+        current = row["total_crime_cases"]
+        previous = yoy_rates.get(code, 0)
+        if previous > 0:
+            return round((current - previous) / previous, 4)
+        return 0.0
+
+    grouped["crime_yoy_rate"] = grouped.apply(calc_yoy, axis=1)
+
     final_cols = [
         "code",
         "ward_name",
@@ -97,6 +151,12 @@ def fetch_crime_data(output_path=None):
         "violent_crime_cases",
         "theft_crime_cases",
         "other_crime_cases",
+        "crime_total_count",
+        "violent_crime_count",
+        "theft_count",
+        "bicycle_theft_count",
+        "burglary_count",
+        "crime_yoy_rate",
     ]
     df = grouped[final_cols].sort_values("code").reset_index(drop=True)
 
