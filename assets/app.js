@@ -1055,9 +1055,8 @@ function renderDrilldown(row) {
       values: [
         ["若年層比率 (20-30代)", `${((row.age_20s_ratio + row.age_30s_ratio) * 100).toFixed(1)} %`],
         ["公園総面積", `${formatNumber(row.park_area_total)} ㎡`],
-        ["幹線道路密度", `${formatDecimal(row.major_road_density, 2)} km/km2`],
       ],
-      note: "若い単身世帯が好む街の活性度（20代・30代比率）と、幹線道路密度、1人あたりの公園緑地面積を評価しています。",
+      note: "若い単身世帯が好む街の活性度（20代・30代比率）と、1人あたりの公園緑地面積を評価しています。",
     },
   ];
 
