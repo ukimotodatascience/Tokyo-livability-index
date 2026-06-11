@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  workflow_run:
+    workflows: ["Tokyo Livability Data Pipeline"]
+    types:
+      - completed
   workflow_dispatch: # 手動実行も可能にする
 
 # デプロイに必要な権限を設定

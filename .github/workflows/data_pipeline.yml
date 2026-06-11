@@ -25,8 +25,9 @@ jobs:
         run: |
           uv python pin 3.10
 
-      - name: 依存ライブラリのインストール
+      - name: 仮想環境の作成と依存ライブラリのインストール
         run: |
+          uv venv
           uv pip install -r requirements.txt
 
       - name: パイプライン実行
@@ -40,10 +41,10 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
+
           # 生成された加工データCSVおよび埋め込みデータJS、更新されたrawデータをステージング
           git add data/processed/tokyo_livability_index.csv assets/embedded-data.js data/raw/*.csv
-          
+
           # 変更がある場合のみコミット＆プッシュ（無限ビルドを避けるため [skip ci] を付与）
           if ! git diff --cached --exit-code; then
             git commit -m "chore: 統計データを最新に自動更新 [skip ci]"
