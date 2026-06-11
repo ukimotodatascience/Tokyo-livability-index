@@ -244,6 +244,66 @@ def build_scores(master_df):
         master_df["shelter_count"] / master_df["population"]
     ) * 10000
 
+    # Calculate additional metrics requested from table definitions
+    master_df["population_total"] = master_df["population"].astype(int)
+    master_df["area_km2"] = master_df["ward_area_km2"]
+    master_df["population_density"] = (
+        master_df["population"] / master_df["ward_area_km2"]
+    )
+    master_df["avg_household_size"] = (
+        master_df["population"] / master_df["household_total"]
+    )
+
+    master_df["supermarket_per_10k"] = (
+        master_df["supermarket_count"] / master_df["population"]
+    ) * 10000
+    master_df["supermarket_per_km2"] = (
+        master_df["supermarket_count"] / master_df["ward_area_km2"]
+    )
+    master_df["convenience_store_count"] = master_df["convenience_count"]
+    master_df["convenience_store_per_10k"] = (
+        master_df["convenience_count"] / master_df["population"]
+    ) * 10000
+    master_df["convenience_store_per_km2"] = (
+        master_df["convenience_count"] / master_df["ward_area_km2"]
+    )
+    master_df["medical_facility_per_10k"] = (
+        master_df["medical_facility_count"] / master_df["population"]
+    ) * 10000
+    master_df["medical_facility_per_km2"] = (
+        master_df["medical_facility_count"] / master_df["ward_area_km2"]
+    )
+
+    master_df["crime_total_per_10k"] = (
+        master_df["crime_total_count"] / master_df["population"]
+    ) * 10000
+    master_df["crime_density_per_km2"] = (
+        master_df["crime_total_count"] / master_df["ward_area_km2"]
+    )
+    master_df["violent_crime_per_10k"] = (
+        master_df["violent_crime_count"] / master_df["population"]
+    ) * 10000
+    master_df["theft_per_10k"] = (
+        master_df["theft_count"] / master_df["population"]
+    ) * 10000
+    master_df["bicycle_theft_per_10k"] = (
+        master_df["bicycle_theft_count"] / master_df["population"]
+    ) * 10000
+    master_df["burglary_per_10k"] = (
+        master_df["burglary_count"] / master_df["population"]
+    ) * 10000
+
+    master_df["shelter_per_10k"] = (
+        master_df["shelter_count"] / master_df["population"]
+    ) * 10000
+    master_df["shelter_density"] = (
+        master_df["shelter_count"] / master_df["ward_area_km2"]
+    )
+
+    master_df["major_road_density"] = (
+        master_df["major_road_length_km"] / master_df["ward_area_km2"]
+    )
+
     # 1. 交通アクセス (駅密度40%, 路線密度20%, 主要駅アクセス時間40%)
     access_time_score = min_max_normalize(
         master_df["avg_time_to_major_stations_min"], invert=True
@@ -425,7 +485,11 @@ def run_pipeline():
             "code",
             "ward_name",
             "population",
+            "population_total",
             "ward_area_km2",
+            "area_km2",
+            "population_density",
+            "avg_household_size",
             "score_accessibility",
             "score_safety",
             "score_convenience",
@@ -439,14 +503,31 @@ def run_pipeline():
             "time_to_ikebukuro_min",
             "time_to_shinagawa_min",
             "avg_time_to_major_stations_min",
+            "station_density",
+            "supermarket_per_10k",
+            "supermarket_per_km2",
+            "convenience_store_count",
+            "convenience_store_per_10k",
+            "convenience_store_per_km2",
+            "medical_facility_per_10k",
+            "medical_facility_per_km2",
             "crime_total_count",
+            "crime_total_per_10k",
+            "crime_density_per_km2",
             "violent_crime_count",
+            "violent_crime_per_10k",
             "theft_count",
+            "theft_per_10k",
             "bicycle_theft_count",
+            "bicycle_theft_per_10k",
             "burglary_count",
+            "burglary_per_10k",
             "crime_yoy_rate",
             "flood_risk_area_ratio",
             "liquefaction_high_area_ratio",
+            "shelter_per_10k",
+            "shelter_density",
+            "major_road_density",
             "park_area_total",
             "recommended_profile",
         ]
