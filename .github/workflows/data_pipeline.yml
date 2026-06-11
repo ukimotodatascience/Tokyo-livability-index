@@ -1,0 +1,53 @@
+name: Tokyo Livability Data Pipeline
+
+on:
+  schedule:
+    # 毎月1日の午前9時（日本時間 / UTC 0:00）に自動実行
+    - cron: '0 0 1 * *'
+  workflow_dispatch: # GitHubのウェブ管理画面からボタンぽちで手動実行可能
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 成果物CSVおよびJSをリポジトリへ自動コミット＆プッシュするための書き込み権限
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: uv のセットアップ
+        uses: astral-sh/setup-uv-action@v5
+        with:
+          enable-cache: true
+
+      - name: Pythonのセットアップ
+        run: |
+          uv python pin 3.10
+
+      - name: 依存ライブラリのインストール
+        run: |
+          uv pip install -r requirements.txt
+
+      - name: パイプライン実行
+        env:
+          # GitHub Secretsに登録されたe-Stat APIキーを環境変数に注入
+          ESTAT_API_KEY: ${{ secrets.ESTAT_API_KEY }}
+        run: |
+          uv run python main.py
+
+      - name: 更新されたデータをGitにコミット&プッシュ
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # 生成された加工データCSVおよび埋め込みデータJS、更新されたrawデータをステージング
+          git add data/processed/tokyo_livability_index.csv assets/embedded-data.js data/raw/*.csv
+          
+          # 変更がある場合のみコミット＆プッシュ（無限ビルドを避けるため [skip ci] を付与）
+          if ! git diff --cached --exit-code; then
+            git commit -m "chore: 統計データを最新に自動更新 [skip ci]"
+            git push
+          else
+            echo "データに変更はありませんでした。"
+          fi
