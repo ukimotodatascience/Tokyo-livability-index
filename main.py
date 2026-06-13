@@ -217,6 +217,12 @@ def merge_source_data(estat_df, crime_df, osm_df, spatial_df, area_df, master_ra
 
 
 def build_scores(master_df):
+    # Calculate daytime population-adjusted active population for crime normalization
+    active_pop = (
+        master_df["population"] * (1.0 + master_df["day_night_population_ratio"]) / 2.0
+    )
+    master_df["active_population"] = active_pop
+
     master_df["station_density"] = (
         master_df["station_count"] / master_df["ward_area_km2"]
     )
@@ -234,11 +240,12 @@ def build_scores(master_df):
         master_df["daily_facility_count"] / master_df["ward_area_km2"]
     )
 
+    # Crime normalized by active population (average of day and night population)
     master_df["crime_rate_per_1000"] = (
-        master_df["total_crime_cases"] / master_df["population"]
+        master_df["total_crime_cases"] / master_df["active_population"]
     ) * 1000
     master_df["serious_crime_rate_per_10000"] = (
-        master_df["serious_crime_cases"] / master_df["population"]
+        master_df["serious_crime_cases"] / master_df["active_population"]
     ) * 10000
     master_df["shelter_rate_per_10000"] = (
         master_df["shelter_count"] / master_df["population"]
@@ -274,23 +281,24 @@ def build_scores(master_df):
         master_df["medical_facility_count"] / master_df["ward_area_km2"]
     )
 
+    # Crime normalized by active population for display as well
     master_df["crime_total_per_10k"] = (
-        master_df["crime_total_count"] / master_df["population"]
+        master_df["crime_total_count"] / master_df["active_population"]
     ) * 10000
     master_df["crime_density_per_km2"] = (
         master_df["crime_total_count"] / master_df["ward_area_km2"]
     )
     master_df["violent_crime_per_10k"] = (
-        master_df["violent_crime_count"] / master_df["population"]
+        master_df["violent_crime_count"] / master_df["active_population"]
     ) * 10000
     master_df["theft_per_10k"] = (
-        master_df["theft_count"] / master_df["population"]
+        master_df["theft_count"] / master_df["active_population"]
     ) * 10000
     master_df["bicycle_theft_per_10k"] = (
-        master_df["bicycle_theft_count"] / master_df["population"]
+        master_df["bicycle_theft_count"] / master_df["active_population"]
     ) * 10000
     master_df["burglary_per_10k"] = (
-        master_df["burglary_count"] / master_df["population"]
+        master_df["burglary_count"] / master_df["active_population"]
     ) * 10000
 
     master_df["shelter_per_10k"] = (
@@ -304,14 +312,30 @@ def build_scores(master_df):
         master_df["major_road_length_km"] / master_df["ward_area_km2"]
     )
 
-    # 1. 交通アクセス (駅密度40%, 路線密度20%, 主要駅アクセス時間40%)
+    # Added population-adjusted station and line metrics
+    master_df["station_per_10k"] = (
+        master_df["station_count"] / master_df["population"]
+    ) * 10000
+    master_df["line_per_10k"] = (
+        master_df["line_count"] / master_df["population"]
+    ) * 10000
+    master_df["daily_facility_per_10k"] = (
+        master_df["daily_facility_count"] / master_df["population"]
+    ) * 10000
+
+    # 1. 交通アクセス (駅密度+人口比 40%, 路線密度+人口比 20%, 主要駅アクセス時間40%)
     access_time_score = min_max_normalize(
         master_df["avg_time_to_major_stations_min"], invert=True
     )
+    station_norm = 0.5 * min_max_normalize(
+        master_df["station_density"]
+    ) + 0.5 * min_max_normalize(master_df["station_per_10k"])
+    line_norm = 0.5 * min_max_normalize(
+        master_df["line_density"]
+    ) + 0.5 * min_max_normalize(master_df["line_per_10k"])
+
     master_df["score_accessibility"] = (
-        0.4 * min_max_normalize(master_df["station_density"])
-        + 0.2 * min_max_normalize(master_df["line_density"])
-        + 0.4 * access_time_score
+        0.4 * station_norm + 0.2 * line_norm + 0.4 * access_time_score
     )
 
     # 2. 治安 (総犯罪率70%, 重大犯罪率30%)
@@ -319,12 +343,22 @@ def build_scores(master_df):
         master_df["crime_rate_per_1000"], invert=True
     ) + 0.3 * min_max_normalize(master_df["serious_crime_rate_per_10000"], invert=True)
 
-    # 3. 生活利便性 (コンビニ25%, スーパー25%, 医療30%, 日常施設20%)
+    # 3. 生活利便性 (コンビニ25%, スーパー25%, 医療30%, 日常施設20% - それぞれ密度50%と人口比50%をブレンド)
+    conv_norm = 0.5 * min_max_normalize(
+        master_df["convenience_density"]
+    ) + 0.5 * min_max_normalize(master_df["convenience_store_per_10k"])
+    super_norm = 0.5 * min_max_normalize(
+        master_df["supermarket_density"]
+    ) + 0.5 * min_max_normalize(master_df["supermarket_per_10k"])
+    medical_norm = 0.5 * min_max_normalize(
+        master_df["medical_density"]
+    ) + 0.5 * min_max_normalize(master_df["medical_facility_per_10k"])
+    daily_norm = 0.5 * min_max_normalize(
+        master_df["daily_facility_density"]
+    ) + 0.5 * min_max_normalize(master_df["daily_facility_per_10k"])
+
     master_df["score_convenience"] = (
-        0.25 * min_max_normalize(master_df["convenience_density"])
-        + 0.25 * min_max_normalize(master_df["supermarket_density"])
-        + 0.30 * min_max_normalize(master_df["medical_density"])
-        + 0.20 * min_max_normalize(master_df["daily_facility_density"])
+        0.25 * conv_norm + 0.25 * super_norm + 0.30 * medical_norm + 0.20 * daily_norm
     )
 
     # 4. 防災・災害スコア (洪水リスク40%, 避難所密度30%, 液状化リスク30%)
@@ -490,6 +524,7 @@ def run_pipeline():
             "area_km2",
             "population_density",
             "avg_household_size",
+            "day_night_population_ratio",
             "score_accessibility",
             "score_safety",
             "score_convenience",
@@ -504,6 +539,8 @@ def run_pipeline():
             "time_to_shinagawa_min",
             "avg_time_to_major_stations_min",
             "station_density",
+            "station_per_10k",
+            "line_per_10k",
             "supermarket_per_10k",
             "supermarket_per_km2",
             "convenience_store_count",
@@ -511,6 +548,7 @@ def run_pipeline():
             "convenience_store_per_km2",
             "medical_facility_per_10k",
             "medical_facility_per_km2",
+            "daily_facility_per_10k",
             "crime_total_count",
             "crime_total_per_10k",
             "crime_density_per_km2",

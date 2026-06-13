@@ -221,6 +221,7 @@ async function loadData() {
       "area_km2",
       "population_density",
       "avg_household_size",
+      "day_night_population_ratio",
       "score_accessibility",
       "score_safety",
       "score_convenience",
@@ -229,8 +230,10 @@ async function loadData() {
       "score_livability",
       "station_count",
       "station_density",
+      "station_per_10k",
       "line_count",
       "line_density",
+      "line_per_10k",
       "shelter_count",
       "shelter_per_10k",
       "shelter_density",
@@ -251,6 +254,7 @@ async function loadData() {
       "medical_facility_per_km2",
       "daily_facility_count",
       "daily_facility_density",
+      "daily_facility_per_10k",
       "rent_monthly_avg",
       "time_to_tokyo_min",
       "time_to_shinjuku_min",
@@ -278,14 +282,16 @@ async function loadData() {
       merged[key] = toNumber(merged[key]);
     });
 
+    const activePop = merged.population * (1.0 + merged.day_night_population_ratio) / 2.0;
+
     merged.crime_rate_per_1000 = perCapitaRate(
       merged.total_crime_cases,
-      merged.population,
+      activePop,
       1000,
     );
     merged.serious_crime_rate_per_10000 = perCapitaRate(
       merged.serious_crime_cases,
-      merged.population,
+      activePop,
       10000,
     );
     merged.shelter_rate_per_10000 = perCapitaRate(
