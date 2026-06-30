@@ -47,7 +47,7 @@ jobs:
             git config --local user.name "github-actions[bot]"
             git add data/processed/tokyo_livability_index.csv assets/embedded-data.js data/raw/*.csv
             git commit -m "chore: 統計データを最新に自動更新 [skip ci]"
-            git push origin main
+            git push
           else
             echo "No changes detected. Skipping commit."
           fi
