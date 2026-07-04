@@ -97,69 +97,7 @@ const elements = {
   drawerContent: document.querySelector("#drawer-content"),
 };
 
-function parseCsv(text) {
-  const cleanText = normalizeCsvText(text).replace(/^\uFEFF/, "").trim();
-  if (!cleanText) {
-    return [];
-  }
-
-  const [headers, ...lines] = parseCsvRecords(cleanText);
-  return lines.map((values) => {
-    return headers.reduce((row, header, index) => {
-      row[header] = values[index] ?? "";
-      return row;
-    }, {});
-  });
-}
-
-function normalizeCsvText(text) {
-  if (typeof text === "string") {
-    return text;
-  }
-  if (text && typeof text.value === "string") {
-    return text.value;
-  }
-  return "";
-}
-
-function parseCsvRecords(text) {
-  const records = [];
-  let record = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const nextChar = text[index + 1];
-
-    if (char === '"' && inQuotes && nextChar === '"') {
-      field += '"';
-      index += 1;
-    } else if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === "," && !inQuotes) {
-      record.push(field);
-      field = "";
-    } else if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && nextChar === "\n") {
-        index += 1;
-      }
-      record.push(field);
-      records.push(record);
-      record = [];
-      field = "";
-    } else {
-      field += char;
-    }
-  }
-
-  if (field || record.length > 0) {
-    record.push(field);
-    records.push(record);
-  }
-
-  return records;
-}
+// CSVパース用および重複計算関数は削除されました（Python側で計算済みのJSONデータがロードされます）
 
 function toNumber(value) {
   const number = Number(value);
@@ -194,162 +132,16 @@ function availableScoreMetrics(row = state.rows[0]) {
 }
 
 async function loadData() {
-  const { indexText, estatText, spatialText, crimeText, poiText, areaText, geojson } =
-    await loadSourceData();
-
-  const estatByCode = Object.fromEntries(parseCsv(estatText).map((row) => [row.code, row]));
-  const spatialByCode = Object.fromEntries(parseCsv(spatialText).map((row) => [row.code, row]));
-  const crimeByCode = Object.fromEntries(parseCsv(crimeText).map((row) => [row.code, row]));
-  const poiByCode = Object.fromEntries(parseCsv(poiText).map((row) => [row.code, row]));
-  const areaByCode = Object.fromEntries(parseCsv(areaText).map((row) => [row.code, row]));
-
-  state.rows = parseCsv(indexText).map((row) => {
-    const merged = {
-      ...row,
-      ...estatByCode[row.code],
-      ...spatialByCode[row.code],
-      ...crimeByCode[row.code],
-      ...poiByCode[row.code],
-      ...areaByCode[row.code],
-      ward_name: row.ward_name,
-    };
-
-    [
-      "population",
-      "population_total",
-      "ward_area_km2",
-      "area_km2",
-      "population_density",
-      "avg_household_size",
-      "day_night_population_ratio",
-      "score_accessibility",
-      "score_safety",
-      "score_convenience",
-      "score_resilience",
-      "score_affordability",
-      "score_livability",
-      "station_count",
-      "station_density",
-      "station_per_10k",
-      "line_count",
-      "line_density",
-      "line_per_10k",
-      "shelter_count",
-      "shelter_per_10k",
-      "shelter_density",
-      "total_crime_cases",
-      "serious_crime_cases",
-      "violent_crime_cases",
-      "theft_crime_cases",
-      "other_crime_cases",
-      "convenience_count",
-      "convenience_store_count",
-      "convenience_store_per_10k",
-      "convenience_store_per_km2",
-      "supermarket_count",
-      "supermarket_per_10k",
-      "supermarket_per_km2",
-      "medical_facility_count",
-      "medical_facility_per_10k",
-      "medical_facility_per_km2",
-      "daily_facility_count",
-      "daily_facility_density",
-      "daily_facility_per_10k",
-      "rent_monthly_avg",
-      "time_to_tokyo_min",
-      "time_to_shinjuku_min",
-      "time_to_shibuya_min",
-      "time_to_ikebukuro_min",
-      "time_to_shinagawa_min",
-      "avg_time_to_major_stations_min",
-      "crime_total_count",
-      "crime_total_per_10k",
-      "crime_density_per_km2",
-      "violent_crime_count",
-      "violent_crime_per_10k",
-      "theft_count",
-      "theft_per_10k",
-      "bicycle_theft_count",
-      "bicycle_theft_per_10k",
-      "burglary_count",
-      "burglary_per_10k",
-      "crime_yoy_rate",
-      "flood_risk_area_ratio",
-      "liquefaction_high_area_ratio",
-      "major_road_density",
-      "park_area_total",
-    ].forEach((key) => {
-      merged[key] = toNumber(merged[key]);
-    });
-
-    const activePop = merged.population * (1.0 + merged.day_night_population_ratio) / 2.0;
-
-    merged.crime_rate_per_1000 = perCapitaRate(
-      merged.total_crime_cases,
-      activePop,
-      1000,
-    );
-    merged.serious_crime_rate_per_10000 = perCapitaRate(
-      merged.serious_crime_cases,
-      activePop,
-      10000,
-    );
-    merged.shelter_rate_per_10000 = perCapitaRate(
-      merged.shelter_count,
-      merged.population,
-      10000,
-    );
-    merged.station_density = densityPerKm2(merged.station_count, merged.ward_area_km2);
-    merged.line_density = densityPerKm2(merged.line_count, merged.ward_area_km2);
-    merged.daily_facility_density = densityPerKm2(
-      merged.daily_facility_count,
-      merged.ward_area_km2,
-    );
-
-    return merged;
-  });
-
+  const { rows, geojson } = await loadSourceData();
+  state.rows = rows;
   state.geojson = geojson;
 }
 
 async function loadSourceData() {
-  try {
-    const [indexText, estatText, spatialText, crimeText, poiText, areaText, geojson] =
-      await Promise.all([
-        fetchText(DATA_PATHS.index),
-        fetchText(DATA_PATHS.estat),
-        fetchText(DATA_PATHS.spatial),
-        fetchText(DATA_PATHS.crime),
-        fetchText(DATA_PATHS.poi),
-        fetchText(DATA_PATHS.area),
-        fetchJson(DATA_PATHS.geojson),
-      ]);
-
-    return { indexText, estatText, spatialText, crimeText, poiText, areaText, geojson };
-  } catch (error) {
-    if (window.TOKYO_LIVABILITY_EMBEDDED_DATA) {
-      console.info("Using embedded data fallback.", error);
-      return window.TOKYO_LIVABILITY_EMBEDDED_DATA;
-    }
-
-    throw error;
+  if (window.TOKYO_LIVABILITY_EMBEDDED_DATA) {
+    return window.TOKYO_LIVABILITY_EMBEDDED_DATA;
   }
-}
-
-async function fetchText(path) {
-  const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}: ${response.status}`);
-  }
-  return response.text();
-}
-
-async function fetchJson(path) {
-  const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}: ${response.status}`);
-  }
-  return response.json();
+  throw new Error("Embedded data (window.TOKYO_LIVABILITY_EMBEDDED_DATA) is not loaded.");
 }
 
 function calculatePersonalizedScore(row) {

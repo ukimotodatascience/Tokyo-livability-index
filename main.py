@@ -389,8 +389,8 @@ def build_scores(master_df):
     return add_ward_characteristics(master_df)
 
 
-def run_pipeline():
-    logging.info("Starting Tokyo livability data pipeline.")
+def run_pipeline(update_api=False):
+    logging.info("Starting Tokyo livability data pipeline. (update_api=%s)", update_api)
 
     with TemporaryDirectory(prefix=".tmp_update_", dir=DATA_RAW_DIR) as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -402,11 +402,14 @@ def run_pipeline():
 
         # e-Stat
         try:
+            if not update_api:
+                raise RuntimeError("API fetch skipped (update_api=False)")
             estat_df = fetch_estat_data(output_path=temp_raw_paths["estat"])
         except Exception as exc:
-            logging.warning(
-                "e-Stat API fetch failed, falling back to local raw data: %s", exc
-            )
+            if update_api:
+                logging.warning(
+                    "e-Stat API fetch failed, falling back to local raw data: %s", exc
+                )
             if (DATA_RAW_DIR / "estat_data.csv").exists():
                 estat_df = pd.read_csv(DATA_RAW_DIR / "estat_data.csv")
                 estat_df.to_csv(
@@ -415,18 +418,20 @@ def run_pipeline():
             else:
                 raise RuntimeError(
                     "e-Stat fetch failed and no local fallback available."
-                ) from exc
+                )
 
         # Crime
         try:
+            if not update_api:
+                raise RuntimeError("API fetch skipped (update_api=False)")
             crime_df = fetch_crime_data(output_path=temp_raw_paths["crime"])
         except Exception as exc:
-            logging.warning(
-                "Crime fetch failed, falling back to local raw data: %s", exc
-            )
+            if update_api:
+                logging.warning(
+                    "Crime fetch failed, falling back to local raw data: %s", exc
+                )
             if (DATA_RAW_DIR / "crime_data.csv").exists():
                 crime_df = pd.read_csv(DATA_RAW_DIR / "crime_data.csv")
-                # Ensure local raw crime data has the new required columns, otherwise we might need to recreate them
                 required_crime_cols = {
                     "crime_total_count",
                     "violent_crime_count",
@@ -454,30 +459,36 @@ def run_pipeline():
             else:
                 raise RuntimeError(
                     "Crime fetch failed and no local fallback available."
-                ) from exc
+                )
 
         # OSM POI
         try:
+            if not update_api:
+                raise RuntimeError("API fetch skipped (update_api=False)")
             osm_df = fetch_osm_data(output_path=temp_raw_paths["osm"])
         except Exception as exc:
-            logging.warning(
-                "OSM POI fetch failed, falling back to local raw data: %s", exc
-            )
+            if update_api:
+                logging.warning(
+                    "OSM POI fetch failed, falling back to local raw data: %s", exc
+                )
             if (DATA_RAW_DIR / "osm_poi_data.csv").exists():
                 osm_df = pd.read_csv(DATA_RAW_DIR / "osm_poi_data.csv")
                 osm_df.to_csv(temp_raw_paths["osm"], index=False, encoding="utf-8-sig")
             else:
                 raise RuntimeError(
                     "OSM POI fetch failed and no local fallback available."
-                ) from exc
+                )
 
         # Spatial
         try:
+            if not update_api:
+                raise RuntimeError("API fetch skipped (update_api=False)")
             spatial_df = fetch_spatial_data(output_path=temp_raw_paths["spatial"])
         except Exception as exc:
-            logging.warning(
-                "Spatial fetch failed, falling back to local raw data: %s", exc
-            )
+            if update_api:
+                logging.warning(
+                    "Spatial fetch failed, falling back to local raw data: %s", exc
+                )
             if (DATA_RAW_DIR / "spatial_data.csv").exists():
                 spatial_df = pd.read_csv(DATA_RAW_DIR / "spatial_data.csv")
                 spatial_df.to_csv(
@@ -486,15 +497,18 @@ def run_pipeline():
             else:
                 raise RuntimeError(
                     "Spatial fetch failed and no local fallback available."
-                ) from exc
+                )
 
         # Area
         try:
+            if not update_api:
+                raise RuntimeError("API fetch skipped (update_api=False)")
             area_df = fetch_area_data(output_path=temp_raw_paths["area"])
         except Exception as exc:
-            logging.warning(
-                "Area fetch failed, falling back to local raw data: %s", exc
-            )
+            if update_api:
+                logging.warning(
+                    "Area fetch failed, falling back to local raw data: %s", exc
+                )
             if (DATA_RAW_DIR / "area_data.csv").exists():
                 area_df = pd.read_csv(DATA_RAW_DIR / "area_data.csv")
                 area_df.to_csv(
@@ -582,22 +596,7 @@ def run_pipeline():
     # Automatically update assets/embedded-data.js with new data for offline fallback
     logging.info("Syncing processed data into assets/embedded-data.js...")
     try:
-        embedded_data = {}
-        csv_mappings = {
-            "indexText": PROCESSED_OUTPUT_PATH,
-            "estatText": RAW_OUTPUT_PATHS["estat"],
-            "spatialText": RAW_OUTPUT_PATHS["spatial"],
-            "crimeText": RAW_OUTPUT_PATHS["crime"],
-            "poiText": RAW_OUTPUT_PATHS["osm"],
-            "areaText": RAW_OUTPUT_PATHS["area"],
-        }
-        for key, path in csv_mappings.items():
-            if path.exists():
-                with open(path, "r", encoding="utf-8-sig") as f:
-                    embedded_data[key] = f.read().replace("\ufeff", "")
-            else:
-                logging.warning("CSV path not found for embedding: %s", path)
-                embedded_data[key] = ""
+        embedded_data = {"rows": final_df.to_dict(orient="records")}
 
         geojson_path = DATA_RAW_DIR / "gis" / "tokyo_23wards.geojson"
         if geojson_path.exists():
@@ -629,5 +628,11 @@ if __name__ == "__main__":
         default=False,
         help="Kept for CLI compatibility; the pipeline always uses real source data.",
     )
-    parser.parse_args()
-    run_pipeline()
+    parser.add_argument(
+        "--update-api",
+        action="store_true",
+        default=False,
+        help="Fetch latest data from live APIs instead of using local raw CSVs.",
+    )
+    args = parser.parse_args()
+    run_pipeline(update_api=args.update_api)
