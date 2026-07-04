@@ -37,7 +37,7 @@ jobs:
         env:
           ESTAT_API_KEY: ${{ secrets.ESTAT_API_KEY }}
         run: |
-          python main.py
+          python main.py --update-api
 
       - name: Commit and push changes
         run: |
