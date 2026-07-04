@@ -643,4 +643,4 @@ if __name__ == "__main__":
         help="Fetch latest data from live APIs instead of using local raw CSVs.",
     )
     args = parser.parse_args()
-    run_pipeline(update_api=args.update_api)
+    run_pipeline(update_api=args.update_api or args.real)
