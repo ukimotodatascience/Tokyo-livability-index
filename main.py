@@ -621,6 +621,7 @@ def run_pipeline(update_api=False):
         logging.info("Successfully updated assets/embedded-data.js")
     except Exception as exc:
         logging.error("Failed to update assets/embedded-data.js: %s", exc)
+        raise RuntimeError("Failed to update assets/embedded-data.js") from exc
 
     print(final_df.head(5).to_string(index=False))
     return final_df
