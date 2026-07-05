@@ -138,10 +138,33 @@ async function loadData() {
 }
 
 async function loadSourceData() {
-  if (window.TOKYO_LIVABILITY_EMBEDDED_DATA) {
-    return window.TOKYO_LIVABILITY_EMBEDDED_DATA;
+  const data = window.TOKYO_LIVABILITY_EMBEDDED_DATA;
+  if (data && Array.isArray(data.rows)) {
+    return data;
   }
-  throw new Error("Embedded data (window.TOKYO_LIVABILITY_EMBEDDED_DATA) is not loaded.");
+
+  console.warn("Old format embedded data detected or missing. Attempting to reload with cache busting...");
+
+  return new Promise((resolve, reject) => {
+    // Clear the existing invalid data to ensure we load the fresh script
+    window.TOKYO_LIVABILITY_EMBEDDED_DATA = null;
+
+    const script = document.createElement("script");
+    script.src = `assets/embedded-data.js?t=${Date.now()}`;
+    script.onload = () => {
+      const refreshedData = window.TOKYO_LIVABILITY_EMBEDDED_DATA;
+      if (refreshedData && Array.isArray(refreshedData.rows)) {
+        console.log("Successfully loaded refreshed embedded data.");
+        resolve(refreshedData);
+      } else {
+        reject(new Error("Embedded data loaded with cache-buster is still in invalid format."));
+      }
+    };
+    script.onerror = () => {
+      reject(new Error("Failed to load assets/embedded-data.js with cache-buster."));
+    };
+    document.head.appendChild(script);
+  });
 }
 
 function calculatePersonalizedScore(row) {
